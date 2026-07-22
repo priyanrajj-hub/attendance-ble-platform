@@ -16,6 +16,7 @@
       --green-glow: rgba(16, 185, 129, 0.4);
       --text: #f3f4f6;
       --text-muted: #9ca3af;
+      --red: #ef4444;
     }
 
     * {
@@ -84,6 +85,7 @@
       color: var(--text-muted);
       background: #111124;
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      z-index: 5;
     }
 
     .screen {
@@ -95,7 +97,24 @@
     }
 
     .screen.active {
-      display: flex;
+      display: flex !important;
+    }
+
+    /* DIAGNOSTICS CONSOLE */
+    #error-console {
+      display: none;
+      background: var(--red);
+      color: white;
+      padding: 12px;
+      font-size: 11px;
+      font-family: monospace;
+      z-index: 100;
+      position: absolute;
+      top: 30px;
+      left: 0;
+      width: 100%;
+      word-break: break-all;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
     }
 
     /* TYPOGRAPHY & ELEMENTS */
@@ -241,15 +260,15 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      margin: 30px 0;
+      margin: 20px 0;
     }
 
     .beacon {
-      width: 100px;
-      height: 100px;
+      width: 110px;
+      height: 110px;
       border-radius: 50%;
       background: var(--green);
-      box-shadow: 0 0 30px var(--green-glow);
+      box-shadow: 0 0 35px var(--green-glow);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -273,15 +292,16 @@
       }
 
       100% {
-        transform: scale(2);
+        transform: scale(2.2);
         opacity: 0;
       }
     }
 
     .timer-ring {
-      font-size: 24px;
+      font-size: 26px;
       font-weight: bold;
       color: white;
+      z-index: 2;
     }
 
     .token-text {
@@ -289,30 +309,56 @@
       background: rgba(0, 0, 0, 0.3);
       padding: 8px 16px;
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       margin-top: 12px;
       font-size: 14px;
       letter-spacing: 1px;
+      color: #38bdf8;
+      text-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
     }
 
     /* SCREEN 4: FACULTY SCANNER */
+    .radar-circle {
+      width: 48px;
+      height: 48px;
+      border: 2px solid var(--accent);
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
     .scan-list {
       margin-top: 12px;
+      max-height: 280px;
+      overflow-y: auto;
     }
 
     .scan-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px;
-      background: rgba(255, 255, 255, 0.02);
-      border-radius: 10px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
       border-left: 4px solid var(--accent);
-      margin-bottom: 8px;
+      margin-bottom: 10px;
+      transition: all 0.3s ease;
     }
 
     .scan-item.verified {
       border-left-color: var(--green);
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.05);
+    }
+
+    .scan-item.packet-pulse {
+      background: rgba(99, 102, 241, 0.1);
+      transform: scale(1.02);
     }
 
     .device-info h4 {
@@ -323,6 +369,7 @@
     .device-info p {
       font-size: 12px;
       color: var(--text-muted);
+      margin-top: 2px;
     }
 
     .back-btn {
@@ -352,12 +399,17 @@
       <span>🔋 99% | BLE ON</span>
     </div>
 
+    <!-- MOCK ERROR DIAGNOSTICS CONSOLE -->
+    <div id="error-console">
+      <strong>Script Error Output:</strong> <span id="error-message"></span>
+    </div>
+
     <!-- SCREEN 1: LOGIN -->
     <div id="login-screen" class="screen active">
       <h2>Welcome Back</h2>
       <div class="input-group">
         <label for="email">College Email (@college.edu.in)</label>
-        <input type="email" id="email" value="faculty@college.edu.in" placeholder="name@college.edu.in">
+        <input type="email" id="email" value="student@college.edu.in" placeholder="name@college.edu.in">
       </div>
       <div class="input-group">
         <label for="password">Password</label>
@@ -375,7 +427,7 @@
         BLE keys</p>
 
       <div class="fingerprint-icon" onclick="grantBiometrics()">
-        <!-- Simulating a fingerprint sensor graphic -->
+        <!-- Fingerprint icon -->
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
           <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"></path>
@@ -423,124 +475,205 @@
         <span class="token-text" id="token-display">token_sig3098e98342..</span>
       </div>
 
-      <div class="card">
-        <h5 style="margin-bottom: 8px;">Encryption Isolation (Phase 7)</h5>
-        <p style="font-size: 12px; color: var(--text-muted);">The student only receives a rolling fragment from
-          Firestore; the root HMAC Key remains secured inside private sub-folders.</p>
+      <div class="card" style="margin-bottom: 12px;">
+        <h5 style="margin-bottom: 6px; font-size: 13px;">Proximity Security Model:</h5>
+        <p style="font-size: 12px; color: var(--text-muted);">Root HMAC keys are kept secure inside private
+          subcollections. The student's device receives rolling fragments on demand.</p>
       </div>
 
-      <button class="secondary back-btn" onclick="goToScreen('role-screen')">Back to Portal</button>
+      <button class="secondary back-btn" onclick="stopStudentPortal()">Back to Portal</button>
     </div>
 
     <!-- SCREEN 4: FACULTY SCANNER -->
     <div id="faculty-screen" class="screen">
       <div class="flex-row">
         <h2>BLE Scanner</h2>
-        <span
-          style="background: rgba(16,185,129,0.2); color: var(--green); padding: 4px 8px; border-radius: 20px; font-size: 11px;">Scanning...</span>
+        <div class="radar-circle"></div>
       </div>
-      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Resolving proximity and HMAC tokens</p>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Resolving proximity and HMAC tokens</p>
 
-      <h5 style="margin-bottom: 8px; font-weight: 600;">Detected Broadcasters:</h5>
-      <div class="scan-list">
-        <!-- Student 1 (Valid) -->
-        <div class="scan-item verified">
-          <div class="device-info">
-            <h4>Roland Stark (20892)</h4>
-            <p>RSSI: -65 dBm | Scan Count: 5</p>
-          </div>
-          <span style="color: var(--green); font-size: 12px; font-weight: bold;">Present</span>
-        </div>
-
-        <!-- Student 2 (Invalid RSSI) -->
-        <div class="scan-item" style="opacity: 0.7;">
-          <div class="device-info">
-            <h4>Priya Kumar (20901)</h4>
-            <p>RSSI: -87 dBm | Scan Count: 2</p>
-          </div>
-          <span style="color: var(--text-muted); font-size: 11px;">OutOfRange</span>
-        </div>
-
-        <!-- Student 3 (Processing) -->
-        <div class="scan-item verified">
-          <div class="device-info">
-            <h4>Jagan Raj (25020)</h4>
-            <p>RSSI: -58 dBm | Scan Count: 6</p>
-          </div>
-          <span style="color: var(--green); font-size: 12px; font-weight: bold;">Present</span>
-        </div>
+      <h5 style="margin-bottom: 8px; font-weight: 600;">Detected Students (Real-time):</h5>
+      <div class="scan-list" id="scan-list-container">
+        <!-- Rendered dynamically in JS to simulate real BLE packet transfers -->
       </div>
 
-      <div class="card" style="margin-top: 16px;">
-        <h5 style="margin-bottom: 4px;">Server-Side Decision Trigger:</h5>
+      <div class="card" style="margin-top: 12px; margin-bottom: 12px;">
+        <h5 style="margin-bottom: 4px; font-size: 13px;">Server-Side Verification</h5>
         <div style="font-size: 11px; color: var(--text-muted);">
-          Submission triggers <strong>markAttendance()</strong> in Cloud Functions to verify distance (< -75dBm) and
-            email confirmation to parents automatically. </div>
+          Submission triggers <code>markAttendance()</code> to verify payload hashes and enforce RSSI proximity
+          thresholds (e.g. RSSI > -75dBm).
         </div>
-
-        <button style="margin-top: 16px;" onclick="submitAttendance()">Submit verified roll</button>
-        <button class="secondary back-btn" onclick="goToScreen('role-screen')" style="margin-top: 8px;">Back to
-          Portal</button>
       </div>
+
+      <button onclick="submitAttendance()">Submit verified roll</button>
+      <button class="secondary back-btn" onclick="stopFacultyPortal()" style="margin-top: 8px;">Back to Portal</button>
     </div>
+  </div>
 
-    <script>
-      function goToScreen(screenId) {
-        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-        document.getElementById(screenId).classList.add('active');
+  <script>
+    // Global Error Catcher for Remote Debugging
+    window.onerror = function (message, source, lineno, colno, error) {
+      const errDisplay = document.getElementById('error-console');
+      const errMsg = document.getElementById('error-message');
+      if (errDisplay && errMsg) {
+        errMsg.innerText = `${message} (Line: ${lineno}:${colno})`;
+        errDisplay.style.display = 'block';
+      }
+      return false;
+    };
+
+    function goToScreen(screenId) {
+      console.log('Switching to screen:', screenId);
+      const target = document.getElementById(screenId);
+      if (!target) {
+        throw new Error(`Target screen element with ID "${screenId}" does not exist in DOM.`);
       }
 
-      function requestBiometrics() {
-        document.getElementById('biometric-modal').style.display = 'block';
+      const screens = document.querySelectorAll('.screen');
+      screens.forEach(s => {
+        s.classList.remove('active');
+      });
+
+      target.classList.add('active');
+    }
+
+    function requestBiometrics() {
+      const email = document.getElementById('email').value.trim();
+      // Set the display name role dynamically just for the mock select view
+      const roleText = email.includes('faculty') ? 'faculty' : 'student';
+      console.log('Login attempt with role:', roleText);
+      document.getElementById('biometric-modal').style.display = 'block';
+    }
+
+    function grantBiometrics() {
+      document.getElementById('biometric-modal').style.display = 'none';
+      goToScreen('role-screen');
+    }
+
+    /* STUDENT PORTAL CODE */
+    let timerInterval = null;
+    function openStudentPortal() {
+      goToScreen('student-screen');
+      startTimer();
+    }
+
+    function stopStudentPortal() {
+      clearInterval(timerInterval);
+      goToScreen('role-screen');
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      let count = 30;
+      const timerSpan = document.getElementById('timer');
+      const tokenSpan = document.getElementById('token-display');
+
+      if (!timerSpan || !tokenSpan) {
+        throw new Error("Student timer elements not found in DOM");
       }
 
-      function grantBiometrics() {
-        document.getElementById('biometric-modal').style.display = 'none';
-        goToScreen('role-screen');
-      }
+      const tokens = [
+        "c681b51e0ffae38a9da9",
+        "fb345aef34d8ef89bd48",
+        "98a48caf23db8f6ac12c",
+        "a4f89d38c6b78ae0ea18"
+      ];
+      let tIdx = 0;
 
-      function openStudentPortal() {
-        goToScreen('student-screen');
-        startTimer();
-      }
+      timerSpan.innerText = count;
+      tokenSpan.innerText = tokens[tIdx];
 
-      function openFacultyPortal() {
-        goToScreen('faculty-screen');
-      }
-
-      let timerInterval;
-      function startTimer() {
-        clearInterval(timerInterval);
-        let count = 30;
-        const timerSpan = document.getElementById('timer');
-        const tokenSpan = document.getElementById('token-display');
-
-        const tokens = [
-          "c681b51e0ffae38a9da9",
-          "fb345aef34d8ef89bd48",
-          "98a48caf23db8f6ac12c",
-          "a4f89d38c6b78ae0ea18"
-        ];
-        let tIdx = 0;
-
+      timerInterval = setInterval(() => {
+        count--;
+        if (count < 0) {
+          count = 30;
+          tIdx = (tIdx + 1) % tokens.length;
+          tokenSpan.innerText = tokens[tIdx];
+        }
         timerSpan.innerText = count;
-        tokenSpan.innerText = tokens[tIdx];
+      }, 1000);
+    }
 
-        timerInterval = setInterval(() => {
-          count--;
-          if (count < 0) {
-            count = 30;
-            tIdx = (tIdx + 1) % tokens.length;
-            tokenSpan.innerText = tokens[tIdx];
-          }
-          timerSpan.innerText = count;
-        }, 1000);
-      }
+    /* FACULTY SCANNER CODE (DYNAMIC REAL-TIME SIMULATION) */
+    let scanInterval = null;
+    const studentsData = [
+      { id: '20892', name: 'Roland Stark', rssi: -65, count: 5, active: true },
+      { id: '20901', name: 'Priya Kumar', rssi: -87, count: 2, active: false },
+      { id: '25020', name: 'Jagan Raj (You)', rssi: -58, count: 6, active: true },
+      { id: '20194', name: 'Ananya Sen', rssi: -71, count: 4, active: true }
+    ];
 
-      function submitAttendance() {
-        alert("HTTP POST -> markAttendance() called successfully! Attendance written, email notifications queued.");
-      }
-    </script>
+    function openFacultyPortal() {
+      goToScreen('faculty-screen');
+      renderScanList();
+      startScanSimulation();
+    }
+
+    function stopFacultyPortal() {
+      clearInterval(scanInterval);
+      goToScreen('role-screen');
+    }
+
+    function renderScanList() {
+      const container = document.getElementById('scan-list-container');
+      if (!container) return;
+
+      container.innerHTML = '';
+
+      // Sort students dynamically by signal strength (RSSI)
+      const sorted = [...studentsData].sort((a, b) => b.rssi - a.rssi);
+
+      sorted.forEach(student => {
+        const item = document.createElement('div');
+        item.id = `student-card-${student.id}`;
+
+        // Define statuses based on RSSI compliance (RSSI > -75dBm is Verified / Present)
+        const isVerified = student.rssi > -75;
+        item.className = `scan-item ${isVerified ? 'verified' : ''}`;
+
+        item.innerHTML = `
+          <div class="device-info">
+            <h4>${student.name} (${student.id})</h4>
+            <p id="packet-details-${student.id}">RSSI: ${student.rssi} dBm | Packet Count: ${student.count}</p>
+          </div>
+          <span style="color: ${isVerified ? 'var(--green)' : 'var(--text-muted)'}; font-size: 12px; font-weight: bold;">
+            ${isVerified ? 'Verified' : 'OutOfRange'}
+          </span>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function startScanSimulation() {
+      clearInterval(scanInterval);
+      scanInterval = setInterval(() => {
+        // Randomly pick a student to simulate receiving a packet
+        const randomIdx = Math.floor(Math.random() * studentsData.length);
+        const student = studentsData[randomIdx];
+
+        // Fluctuating RSSI between +/- 3 dBm
+        const delta = Math.floor(Math.random() * 7) - 3;
+        student.rssi = Math.max(-100, Math.min(-40, student.rssi + delta));
+
+        // Increment packet scan count
+        student.count++;
+
+        // Re-render scanner display
+        renderScanList();
+
+        // Highlight the card that got the packet update
+        const card = document.getElementById(`student-card-${student.id}`);
+        if (card) {
+          card.classList.add('packet-pulse');
+          setTimeout(() => card.classList.remove('packet-pulse'), 400);
+        }
+      }, 1500);
+    }
+
+    function submitAttendance() {
+      alert("HTTP POST -> markAttendance() called successfully!\nVerified rolls submitted to Firestore cloud, automated email notifications triggered.");
+    }
+  </script>
 </body>
 
 </html>
