@@ -3,11 +3,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../ble/ble_advertiser.dart';
 import '../ble/ble_constants.dart';
 import '../services/session_service.dart';
 import '../services/token_service.dart';
 import '../models/attendance_session.dart';
+
 
 /// Student screen — finds the current active session, fetches the
 /// rotating HMAC token, and broadcasts a signed BLE payload.
@@ -150,18 +152,30 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen>
   Future<void> _broadcastSignedPayload(String uid) async {
     if (_session == null) return;
 
-    final token = TokenService.generateToken(
-        _session!.sessionId, _session!.hmacSecret);
-    final payload = TokenService.encodeBlePayload(uid, token);
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getStudentToken')
+          .call({'sessionId': _session!.sessionId});
+      final token = result.data['token'] as String;
 
-    // Stop and restart with new token
-    await _advertiser.stopAdvertising();
+      // Stop and restart with new token
+      await _advertiser.stopAdvertising();
 
-    // Use the existing advertiser with the signed payload
-    await _advertiser.startAdvertisingWithPayload(
-      Uint8List.fromList(payload),
-    );
+      final payload = TokenService.encodeBlePayload(uid, token);
+
+      // Use the existing advertiser with the signed payload
+      await _advertiser.startAdvertisingWithPayload(
+        Uint8List.fromList(payload),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _statusMessage = 'Failed to fetch signed BLE token: $e';
+        });
+      }
+    }
   }
+
 
   Future<void> _terminateSession(String reason) async {
     await _advertiser.stopAdvertising();

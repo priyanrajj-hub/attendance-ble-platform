@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../models/attendance_session.dart';
 import '../models/attendance_record.dart';
 import 'token_service.dart';
@@ -36,9 +37,20 @@ class SessionService {
       hmacSecret: secret,
     );
 
-    await docRef.set(session.toFirestore());
+    // Save metadata without hmacSecret in public doc to prevent student reading it
+    final sessionMap = session.toFirestore();
+    sessionMap.remove('hmacSecret');
+    await docRef.set(sessionMap);
+
+    // Save hmacSecret in private subcollection details document
+    await docRef.collection('private').doc('details').set({
+      'hmacSecret': secret,
+      'facultyId': user.uid,
+    });
+
     return session;
   }
+
 
   /// Close a session manually (faculty stops early).
   Future<void> closeSession(String sessionId) async {
@@ -63,7 +75,30 @@ class SessionService {
 
     if (query.docs.isEmpty) return null;
 
-    final session = AttendanceSession.fromFirestore(query.docs.first);
+    final doc = query.docs.first;
+    final sessionId = doc.id;
+
+    // Fetch the hmacSecret from the private details subcollection (faculty has read permission)
+    final secretDoc = await _firestore
+        .collection('sessions')
+        .doc(sessionId)
+        .collection('private')
+        .doc('details')
+        .get();
+    final hmacSecret = secretDoc.data()?['hmacSecret'] as String? ?? '';
+
+    final data = doc.data();
+    final session = AttendanceSession(
+      sessionId: sessionId,
+      classId: data['classId'] ?? '',
+      subjectName: data['subjectName'] ?? '',
+      facultyId: data['facultyId'] ?? '',
+      startTime: (data['startTime'] as Timestamp).toDate(),
+      endTime: (data['endTime'] as Timestamp).toDate(),
+      status: data['status'] ?? 'closed',
+      hmacSecret: hmacSecret,
+    );
+
     // Auto-expire if past endTime
     if (DateTime.now().isAfter(session.endTime)) {
       await _firestore
@@ -74,6 +109,7 @@ class SessionService {
     }
     return session;
   }
+
 
   /// Get any active session (for students to find the current window).
   Future<AttendanceSession?> findActiveSession() async {
@@ -117,82 +153,36 @@ class SessionService {
   Future<void> markPresent({
     required String sessionId,
     required String studentUid,
+    required String hmacToken,
     required int rssi,
     required int scanCount,
   }) async {
-    // Look up student profile
-    final studentDoc =
-        await _firestore.collection('users').doc(studentUid).get();
-    final studentData = studentDoc.data() ?? {};
-
-    final docRef = _firestore
-        .collection('sessions')
-        .doc(sessionId)
-        .collection('attendance')
-        .doc(studentUid);
-
-    final existing = await docRef.get();
-    if (existing.exists) {
-      // Update scan count and RSSI (dwell-time accumulation)
-      await docRef.update({
-        'scanCount': FieldValue.increment(1),
-        'rssi': rssi, // latest RSSI
-        'lastSeenAt': Timestamp.fromDate(DateTime.now()),
-      });
-    } else {
-      final record = AttendanceRecord(
-        id: studentUid,
-        sessionId: sessionId,
-        studentId: studentUid,
-        studentName: studentData['name'] ?? 'Unknown',
-        rollNo: studentData['rollNo'] ?? '',
-        status: 'present',
-        rssi: rssi,
-        scanCount: 1,
-        markedAt: DateTime.now(),
-      );
-      await docRef.set(record.toFirestore());
-    }
+    // Call the Cloud Function markAttendance (verifies HMAC, RSSI, scanCount on the server-side)
+    await FirebaseFunctions.instance.httpsCallable('markAttendance').call({
+      'sessionId': sessionId,
+      'studentUid': studentUid,
+      'hmacToken': hmacToken,
+      'rssi': rssi,
+      'scanCount': scanCount,
+    });
   }
 
+
   /// Edit an attendance record (faculty: present↔absent, mentor: can set OD).
+  /// Edit an attendance record via Cloud Function (restricted by Faculty/Mentor roles).
   Future<void> editAttendance({
     required String sessionId,
     required String studentUid,
     required String newStatus,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) throw Exception('Not authenticated');
-
-    final docRef = _firestore
-        .collection('sessions')
-        .doc(sessionId)
-        .collection('attendance')
-        .doc(studentUid);
-
-    final doc = await docRef.get();
-    final oldStatus = doc.data()?['status'] ?? 'absent';
-
-    await docRef.update({
-      'status': newStatus,
-      'previousStatus': oldStatus,
-      'editedBy': user.uid,
-      'editedAt': Timestamp.fromDate(DateTime.now()),
-    });
-
-    // Write audit trail
-    await _firestore
-        .collection('sessions')
-        .doc(sessionId)
-        .collection('audit')
-        .add({
-      'studentId': studentUid,
-      'oldStatus': oldStatus,
+    // Call the Cloud Function editAttendance
+    await FirebaseFunctions.instance.httpsCallable('editAttendance').call({
+      'sessionId': sessionId,
+      'studentUid': studentUid,
       'newStatus': newStatus,
-      'editedBy': user.uid,
-      'timestamp': FieldValue.serverTimestamp(),
     });
   }
+
 
   /// Get attendance records for a session.
   Stream<List<AttendanceRecord>> sessionAttendance(String sessionId) {

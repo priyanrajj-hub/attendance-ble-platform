@@ -116,11 +116,11 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
     if (tokenValid &&
         result.rssi >= rssiThreshold &&
         (_detected[decoded.uidPrefix]?.scanCount ?? 0) >= minScanCount) {
-      _markPresent(decoded.uidPrefix, result.rssi);
+      _markPresent(decoded.uidPrefix, result.rssi, decoded.tokenFragment);
     }
   }
 
-  Future<void> _markPresent(String uidPrefix, int rssi) async {
+  Future<void> _markPresent(String uidPrefix, int rssi, String tokenFragment) async {
     final student = _detected[uidPrefix];
     if (student == null || student.markedPresent) return;
 
@@ -130,6 +130,7 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
       await _sessionService.markPresent(
         sessionId: widget.session.sessionId,
         studentUid: uidPrefix,
+        hmacToken: tokenFragment,
         rssi: rssi,
         scanCount: student.scanCount,
       );
@@ -138,6 +139,7 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
     }
     if (mounted) setState(() {});
   }
+
 
   Future<void> _stopScan() async {
     await FlutterBluePlus.stopScan();

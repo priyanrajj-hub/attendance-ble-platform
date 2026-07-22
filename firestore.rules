@@ -40,24 +40,35 @@ service cloud.firestore {
                        (resource.data.facultyId == request.auth.uid ||
                         request.auth.token.role == 'admin');
 
-      // Attendance sub-collection
+      // Private subcollection containing details (hmacSecret) - only faculty owner or admin can read/write.
+      match /private/details {
+        allow read: if request.auth != null &&
+                      (resource.data.facultyId == request.auth.uid ||
+                       request.auth.token.role == 'admin');
+        allow write: if request.auth != null &&
+                       ((resource == null && request.resource.data.facultyId == request.auth.uid) ||
+                        (resource != null && resource.data.facultyId == request.auth.uid) ||
+                        request.auth.token.role == 'admin');
+      }
+
+      // Attendance subcollection - no client writes, all updates must go through markAttendance Cloud Function
       match /attendance/{studentId} {
         // Faculty/admin can read all attendance records.
         // Students can read their own record.
-        allow read: if request.auth != null;
+        allow read: if request.auth != null &&
+                      (request.auth.uid == studentId ||
+                       get(/databases/$(database)/documents/sessions/$(sessionId)).data.facultyId == request.auth.uid ||
+                       request.auth.token.role == 'admin');
 
-        // Only authenticated users can create (via server verification).
-        allow create: if request.auth != null;
-
-        // Only faculty (session owner) or admin can update records.
-        allow update: if request.auth != null;
+        // Block all client writes (creates/updates/deletes)
+        allow write: if false;
       }
 
-      // Audit sub-collection (read-only for admins, write for faculty)
+      // Audit subcollection - read-only for admins, no client writes allowed
       match /audit/{auditId} {
         allow read: if request.auth != null &&
                        request.auth.token.role == 'admin';
-        allow create: if request.auth != null;
+        allow write: if false;
       }
     }
 
@@ -67,10 +78,10 @@ service cloud.firestore {
       allow read: if request.auth != null &&
                      resource.data.studentUid == request.auth.uid;
 
-      // Authenticated users can create notifications.
-      allow create: if request.auth != null;
-
-      // Cloud Functions (admin SDK) bypass these rules to update status.
+      // Limit client creates; strip body/subject/recipients to prevent backend spoofing/spamming.
+      allow create: if request.auth != null &&
+                       request.resource.data.studentUid == request.auth.uid &&
+                       !request.resource.data.keys().hasAny(['recipients', 'body', 'subject', 'status']);
     }
 
     // ── Default deny ──────────────────────────────────────────────
@@ -79,3 +90,4 @@ service cloud.firestore {
     }
   }
 }
+

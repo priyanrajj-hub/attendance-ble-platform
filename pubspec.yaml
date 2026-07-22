@@ -18,6 +18,8 @@ dependencies:
   firebase_storage: ^12.4.4        # Profile photo uploads
   local_auth: ^2.3.0               # Biometric (fingerprint/face) second factor
   image_picker: ^1.1.2             # Profile photo selection during registration
+  cloud_functions: ^5.1.1          # Call Firebase Cloud Functions for verification
+
 
 dev_dependencies:
   flutter_test:
