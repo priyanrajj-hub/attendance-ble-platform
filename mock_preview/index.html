@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -48,6 +49,7 @@
       letter-spacing: 0.5px;
       background: linear-gradient(135deg, #a5b4fc, #6366f1);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
@@ -59,7 +61,8 @@
 
     .container {
       width: 100%;
-      max-width: 400px; /* Mobile frame simulation */
+      max-width: 400px;
+      /* Mobile frame simulation */
       height: 750px;
       background: #11111f;
       border: 6px solid #2e303f;
@@ -124,7 +127,8 @@
       letter-spacing: 0.5px;
     }
 
-    .input-group input, .input-group select {
+    .input-group input,
+    .input-group select {
       width: 100%;
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid rgba(255, 255, 255, 0.1);
@@ -177,7 +181,7 @@
       border-top: 1px solid var(--border);
       border-radius: 24px 24px 0 0;
       padding: 24px;
-      box-shadow: 0 -10px 25px rgba(0,0,0,0.5);
+      box-shadow: 0 -10px 25px rgba(0, 0, 0, 0.5);
       text-align: center;
       z-index: 10;
     }
@@ -207,8 +211,15 @@
     }
 
     @keyframes pulse {
-      0% { transform: scale(1); opacity: 0.8; }
-      100% { transform: scale(1.4); opacity: 0; }
+      0% {
+        transform: scale(1);
+        opacity: 0.8;
+      }
+
+      100% {
+        transform: scale(1.4);
+        opacity: 0;
+      }
     }
 
     /* SCREEN 2: ROLE SELECT */
@@ -256,8 +267,15 @@
     }
 
     @keyframes pulse-green {
-      0% { transform: scale(1); opacity: 1; }
-      100% { transform: scale(2); opacity: 0; }
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+
+      100% {
+        transform: scale(2);
+        opacity: 0;
+      }
     }
 
     .timer-ring {
@@ -268,7 +286,7 @@
 
     .token-text {
       font-family: monospace;
-      background: rgba(0,0,0,0.3);
+      background: rgba(0, 0, 0, 0.3);
       padding: 8px 16px;
       border-radius: 8px;
       border: 1px solid rgba(255, 255, 255, 0.05);
@@ -287,7 +305,7 @@
       justify-content: space-between;
       align-items: center;
       padding: 12px;
-      background: rgba(255,255,255,0.02);
+      background: rgba(255, 255, 255, 0.02);
       border-radius: 10px;
       border-left: 4px solid var(--accent);
       margin-bottom: 8px;
@@ -319,8 +337,9 @@
     }
   </style>
 </head>
+
 <body>
-  
+
   <header>
     <h1>BLE Attendance System</h1>
     <p>Security Hardened Concept Design Preview</p>
@@ -344,7 +363,7 @@
         <label for="password">Password</label>
         <input type="password" id="password" value="••••••••••">
       </div>
-      
+
       <button onclick="requestBiometrics()" style="margin-top: 10px;">Sign In</button>
       <button class="secondary" style="margin-top: 10px;">Register Account</button>
     </div>
@@ -352,11 +371,17 @@
     <!-- MOCK BIOMETRIC POPUP (RULE HARDENING DEMO) -->
     <div id="biometric-modal">
       <h3>Fingerprint Required</h3>
-      <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Confirm your identity to decrypt localized BLE keys</p>
-      
+      <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Confirm your identity to decrypt localized
+        BLE keys</p>
+
       <div class="fingerprint-icon" onclick="grantBiometrics()">
         <!-- Simulating a fingerprint sensor graphic -->
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"></path><path d="M12 6a6 6 0 0 1 6 6c0 2.2-1.8 4-4 4"></path><path d="M8 12a4 4 0 0 1 8 0c0 1.1-.9 2-2 2"></path></svg>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
+          <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"></path>
+          <path d="M12 6a6 6 0 0 1 6 6c0 2.2-1.8 4-4 4"></path>
+          <path d="M8 12a4 4 0 0 1 8 0c0 1.1-.9 2-2 2"></path>
+        </svg>
       </div>
 
       <span style="font-size: 11px; color: var(--text-muted);">Tap fingerprint to verify login second-factor</span>
@@ -366,17 +391,20 @@
     <div id="role-screen" class="screen">
       <div class="flex-row" style="margin-bottom: 20px;">
         <h2>Portal Home</h2>
-        <span style="font-size: 11px; background: rgba(99,102,241,0.2); padding: 4px 8px; border-radius: 20px; color: var(--accent);">Verified</span>
+        <span
+          style="font-size: 11px; background: rgba(99,102,241,0.2); padding: 4px 8px; border-radius: 20px; color: var(--accent);">Verified</span>
       </div>
 
       <div class="card role-card" onclick="openStudentPortal()">
         <h4 style="color: var(--accent);">Student Portal</h4>
-        <p style="font-size: 13px; color: var(--text-muted);">Broadcast rotating cryptographically signed BLE tokens to mark attendance.</p>
+        <p style="font-size: 13px; color: var(--text-muted);">Broadcast rotating cryptographically signed BLE tokens to
+          mark attendance.</p>
       </div>
 
       <div class="card role-card" onclick="openFacultyPortal()">
         <h4 style="color: var(--accent);">Faculty Portal</h4>
-        <p style="font-size: 13px; color: var(--text-muted);">Configure attendance sessions, scan nearby broadcasters, and trigger notifications.</p>
+        <p style="font-size: 13px; color: var(--text-muted);">Configure attendance sessions, scan nearby broadcasters,
+          and trigger notifications.</p>
       </div>
 
       <button class="secondary back-btn" onclick="goToScreen('login-screen')">Log Out</button>
@@ -397,7 +425,8 @@
 
       <div class="card">
         <h5 style="margin-bottom: 8px;">Encryption Isolation (Phase 7)</h5>
-        <p style="font-size: 12px; color: var(--text-muted);">The student only receives a rolling fragment from Firestore; the root HMAC Key remains secured inside private sub-folders.</p>
+        <p style="font-size: 12px; color: var(--text-muted);">The student only receives a rolling fragment from
+          Firestore; the root HMAC Key remains secured inside private sub-folders.</p>
       </div>
 
       <button class="secondary back-btn" onclick="goToScreen('role-screen')">Back to Portal</button>
@@ -407,7 +436,8 @@
     <div id="faculty-screen" class="screen">
       <div class="flex-row">
         <h2>BLE Scanner</h2>
-        <span style="background: rgba(16,185,129,0.2); color: var(--green); padding: 4px 8px; border-radius: 20px; font-size: 11px;">Scanning...</span>
+        <span
+          style="background: rgba(16,185,129,0.2); color: var(--green); padding: 4px 8px; border-radius: 20px; font-size: 11px;">Scanning...</span>
       </div>
       <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Resolving proximity and HMAC tokens</p>
 
@@ -444,71 +474,73 @@
       <div class="card" style="margin-top: 16px;">
         <h5 style="margin-bottom: 4px;">Server-Side Decision Trigger:</h5>
         <div style="font-size: 11px; color: var(--text-muted);">
-            Submission triggers <strong>markAttendance()</strong> in Cloud Functions to verify distance (< -75dBm) and email confirmation to parents automatically.
+          Submission triggers <strong>markAttendance()</strong> in Cloud Functions to verify distance (< -75dBm) and
+            email confirmation to parents automatically. </div>
         </div>
+
+        <button style="margin-top: 16px;" onclick="submitAttendance()">Submit verified roll</button>
+        <button class="secondary back-btn" onclick="goToScreen('role-screen')" style="margin-top: 8px;">Back to
+          Portal</button>
       </div>
-
-      <button style="margin-top: 16px;" onclick="submitAttendance()">Submit verified roll</button>
-      <button class="secondary back-btn" onclick="goToScreen('role-screen')" style="margin-top: 8px;">Back to Portal</button>
     </div>
-  </div>
 
-  <script>
-    function goToScreen(screenId) {
-      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-      document.getElementById(screenId).classList.add('active');
-    }
+    <script>
+      function goToScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+      }
 
-    function requestBiometrics() {
-      document.getElementById('biometric-modal').style.display = 'block';
-    }
+      function requestBiometrics() {
+        document.getElementById('biometric-modal').style.display = 'block';
+      }
 
-    function grantBiometrics() {
-      document.getElementById('biometric-modal').style.display = 'none';
-      goToScreen('role-screen');
-    }
+      function grantBiometrics() {
+        document.getElementById('biometric-modal').style.display = 'none';
+        goToScreen('role-screen');
+      }
 
-    function openStudentPortal() {
-      goToScreen('student_screen');
-      startTimer();
-    }
+      function openStudentPortal() {
+        goToScreen('student-screen');
+        startTimer();
+      }
 
-    function openFacultyPortal() {
-      goToScreen('faculty-screen');
-    }
+      function openFacultyPortal() {
+        goToScreen('faculty-screen');
+      }
 
-    let timerInterval;
-    function startTimer() {
-      clearInterval(timerInterval);
-      let count = 30;
-      const timerSpan = document.getElementById('timer');
-      const tokenSpan = document.getElementById('token-display');
-      
-      const tokens = [
-        "c681b51e0ffae38a9da9",
-        "fb345aef34d8ef89bd48",
-        "98a48caf23db8f6ac12c",
-        "a4f89d38c6b78ae0ea18"
-      ];
-      let tIdx = 0;
-      
-      timerSpan.innerText = count;
-      tokenSpan.innerText = tokens[tIdx];
+      let timerInterval;
+      function startTimer() {
+        clearInterval(timerInterval);
+        let count = 30;
+        const timerSpan = document.getElementById('timer');
+        const tokenSpan = document.getElementById('token-display');
 
-      timerInterval = setInterval(() => {
-        count--;
-        if (count < 0) {
-          count = 30;
-          tIdx = (tIdx + 1) % tokens.length;
-          tokenSpan.innerText = tokens[tIdx];
-        }
+        const tokens = [
+          "c681b51e0ffae38a9da9",
+          "fb345aef34d8ef89bd48",
+          "98a48caf23db8f6ac12c",
+          "a4f89d38c6b78ae0ea18"
+        ];
+        let tIdx = 0;
+
         timerSpan.innerText = count;
-      }, 1000);
-    }
+        tokenSpan.innerText = tokens[tIdx];
 
-    function submitAttendance() {
-      alert("HTTP POST -> markAttendance() called successfully! Attendance written, email notifications queued.");
-    }
-  </script>
+        timerInterval = setInterval(() => {
+          count--;
+          if (count < 0) {
+            count = 30;
+            tIdx = (tIdx + 1) % tokens.length;
+            tokenSpan.innerText = tokens[tIdx];
+          }
+          timerSpan.innerText = count;
+        }, 1000);
+      }
+
+      function submitAttendance() {
+        alert("HTTP POST -> markAttendance() called successfully! Attendance written, email notifications queued.");
+      }
+    </script>
 </body>
+
 </html>
