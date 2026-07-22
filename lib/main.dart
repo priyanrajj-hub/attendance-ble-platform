@@ -21,18 +21,16 @@ Future<void> main() async {
   //   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await Firebase.initializeApp();
 
-  // Configure local Firebase Emulator. Set to true if you are testing locally.
-  const bool useEmulator = true;
-  // Replace with your actual local computer IP address (e.g. '192.168.1.15').
-  // On web/desktop development platforms, 'localhost' is automatically supported.
-  const String localComputerIp = '192.168.1.15';
-
-  if (useEmulator) {
+  // Configure local Firebase Emulators in debug mode only.
+  if (kDebugMode) {
+    // Replace with your actual local computer IP address (e.g. '192.168.1.15') if testing on physical phone.
+    // On web/desktop platforms, 'localhost' is automatically supported.
+    const String localComputerIp = '192.168.1.15';
     final host = kIsWeb ? 'localhost' : localComputerIp;
-    FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+
     await FirebaseAuth.instance.useAuthEmulator(host, 9099);
     FirebaseFunctions.instance.useFunctionsEmulator(host, 5001);
-    debugPrint('Firebase services redirected to emulator at $host');
+    debugPrint('Local emulators initialized for Auth (9099) and Functions (5001) at $host. Firestore remains connected to the cloud.');
   }
 
   runApp(const AttendanceBleTestApp());
