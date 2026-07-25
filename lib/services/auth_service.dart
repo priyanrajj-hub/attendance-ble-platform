@@ -11,7 +11,7 @@ class AuthService {
   final LocalAuthentication _localAuth = LocalAuthentication();
 
   /// The college email domains that are allowed to register / log in.
-  static const String studentDomain = '@ch.en.students.amrita.edu';
+  static const String studentDomain = '@ch.students.amrita.edu';
   static const String facultyDomain = '@ch.amrita.edu';
 
   // ─── Getters ──────────────────────────────────────────────────────
@@ -22,7 +22,7 @@ class AuthService {
   // ─── Domain validation ────────────────────────────────────────────
 
   bool isStudentDomain(String email) {
-    final regex = RegExp(r'^[a-zA-Z0-9._-]+@ch\.en\.students\.amrita\.edu$');
+    final regex = RegExp(r'^[a-zA-Z0-9._-]+@ch\.students\.amrita\.edu$');
     return regex.hasMatch(email.trim().toLowerCase());
   }
 

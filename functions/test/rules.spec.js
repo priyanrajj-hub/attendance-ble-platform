@@ -22,10 +22,10 @@ beforeEach(async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
         await db.collection('users').doc('studentA').set({
-            role: 'student', email: 'a@ch.en.students.amrita.edu', status: 'pending_verification'
+            role: 'student', email: 'a@ch.students.amrita.edu', status: 'pending_verification'
         });
         await db.collection('users').doc('studentB').set({
-            role: 'student', email: 'b@ch.en.students.amrita.edu', status: 'pending_verification'
+            role: 'student', email: 'b@ch.students.amrita.edu', status: 'pending_verification'
         });
         await db.collection('users').doc('facultyA').set({
             role: 'faculty', email: 'c@ch.amrita.edu', status: 'pending_verification'
@@ -119,23 +119,23 @@ describe('Firestore Security Rules', () => {
     });
 
     it('User creation fails if status != pending_verification or if email domain doesn\'t match role', async () => {
-        const newStudentContext = testEnv.authenticatedContext('studentNew', { email: 'new@ch.en.students.amrita.edu', email_verified: false });
+        const newStudentContext = testEnv.authenticatedContext('studentNew', { email: 'new@ch.students.amrita.edu', email_verified: false });
         const db = newStudentContext.firestore();
 
         // 1. Success matching exact role and status
         await assertSucceeds(db.collection('users').doc('studentNew').set({
             role: 'student',
-            email: 'new@ch.en.students.amrita.edu',
+            email: 'new@ch.students.amrita.edu',
             status: 'pending_verification',
             name: 'Bob',
             rollNo: '123'
         }));
 
         // 2. Failure: status is not pending_verification (e.g. they forge "verified")
-        const badStatusContext = testEnv.authenticatedContext('studentBadStats', { email: 'bad@ch.en.students.amrita.edu' });
+        const badStatusContext = testEnv.authenticatedContext('studentBadStats', { email: 'bad@ch.students.amrita.edu' });
         await assertFails(badStatusContext.firestore().collection('users').doc('studentBadStats').set({
             role: 'student',
-            email: 'bad@ch.en.students.amrita.edu',
+            email: 'bad@ch.students.amrita.edu',
             status: 'verified',
             name: 'Bob',
             rollNo: '123'
