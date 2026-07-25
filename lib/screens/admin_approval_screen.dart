@@ -28,20 +28,36 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
   Future<void> _checkAdminClaim() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      setState(() {
-        _isAdmin = false;
-        _checkingAuth = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isAdmin = false;
+          _checkingAuth = false;
+        });
+      }
       return;
     }
 
-    // Force refresh to get latest custom claims
-    final idTokenResult = await user.getIdTokenResult(true);
-    final role = idTokenResult.claims?['role'];
-    setState(() {
-      _isAdmin = role == 'admin';
-      _checkingAuth = false;
-    });
+    // Read the role directly from Firestore since Custom Claims Cloud Functions were removed
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final role = doc.data()?['role'];
+      if (mounted) {
+        setState(() {
+          _isAdmin = role == 'admin';
+          _checkingAuth = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isAdmin = false;
+          _checkingAuth = false;
+        });
+      }
+    }
   }
 
   Future<void> _updateUserStatus(String uid, String newStatus) async {
@@ -105,7 +121,6 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
               stream: FirebaseFirestore.instance
                   .collection('users')
                   .where('status', isEqualTo: 'pending_verification')
-                  .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -168,19 +183,25 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                                 children: [
                                   Text(
                                     data['name'] ?? 'Unknown',
-                                    style: Theme.of(context).textTheme.titleMedium
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
                                         ?.copyWith(fontWeight: FontWeight.bold),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     '${data['rollNo'] ?? '—'} · ${(data['role'] ?? 'unknown').toString().toUpperCase()}',
-                                    style: Theme.of(context).textTheme.bodySmall,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
                                   ),
                                   Text(
                                     data['email'] ?? '',
-                                    style: Theme.of(context).textTheme.bodySmall
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
                                         ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant),
+                                            color:
+                                                colorScheme.onSurfaceVariant),
                                   ),
                                 ],
                               ),
@@ -304,7 +325,8 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                      content: Text('Failed to update role: $e')),
+                                      content:
+                                          Text('Failed to update role: $e')),
                                 );
                               }
                             }
