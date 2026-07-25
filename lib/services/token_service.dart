@@ -27,6 +27,12 @@ class TokenService {
   ///
   /// Both the student app and the verification backend call this with
   /// the same [sessionId] + [secret] + time bucket to produce/verify.
+  ///
+  /// SECURITY NOTE: The HMAC-SHA256 signature is intentionally truncated
+  /// to 8 hex characters (32 bits) to accommodate strict BLE payload budgets.
+  /// While sufficient when guarded by physical proximity heuristics (RSSI),
+  /// 32 bits represents a relatively small brute-force search space if the
+  /// proximity constraint is loosened or bypassed.
   static String generateToken(String sessionId, String secret) {
     final bucket = currentTimeBucket();
     final message = '$sessionId:$bucket';
@@ -76,16 +82,16 @@ class TokenService {
     return false;
   }
 
-
   /// Encode student UID + HMAC token into BLE manufacturer data bytes.
   ///
   /// Format: [studentUid (first 8 chars, 8 bytes) | hmacToken (8 bytes)]
   /// Total: 16 bytes — fits within BLE advertisement limits.
   static List<int> encodeBlePayload(String studentUid, String hmacToken) {
-    final uidBytes = utf8.encode(studentUid.substring(
-        0, studentUid.length > 8 ? 8 : studentUid.length));
+    final uidBytes = utf8.encode(
+        studentUid.substring(0, studentUid.length > 8 ? 8 : studentUid.length));
     // Pad UID to exactly 8 bytes
-    final paddedUid = List<int>.filled(8, 0)..setRange(0, uidBytes.length, uidBytes);
+    final paddedUid = List<int>.filled(8, 0)
+      ..setRange(0, uidBytes.length, uidBytes);
     final tokenBytes = utf8.encode(hmacToken.substring(0, 8));
     return [...paddedUid, ...tokenBytes];
   }
@@ -95,8 +101,7 @@ class TokenService {
       List<int> bytes) {
     if (bytes.length < 16) return null;
     try {
-      final uidPrefix =
-          utf8.decode(bytes.sublist(0, 8)).replaceAll('\x00', '');
+      final uidPrefix = utf8.decode(bytes.sublist(0, 8)).replaceAll('\x00', '');
       final tokenFragment = utf8.decode(bytes.sublist(8, 16));
       return (uidPrefix: uidPrefix, tokenFragment: tokenFragment);
     } catch (_) {
