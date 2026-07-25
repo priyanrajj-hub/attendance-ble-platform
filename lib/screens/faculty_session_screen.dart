@@ -138,6 +138,11 @@ class _FacultySessionScreenState extends State<FacultySessionScreen> {
                 MaterialPageRoute(
                     builder: (_) => const SessionHistoryScreen())),
           ),
+          IconButton(
+            icon: const Icon(Icons.admin_panel_settings),
+            tooltip: 'Admin Panel',
+            onPressed: () => Navigator.pushNamed(context, '/admin'),
+          ),
         ],
       ),
       body: Padding(
