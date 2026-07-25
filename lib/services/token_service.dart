@@ -56,6 +56,27 @@ class TokenService {
     return false;
   }
 
+  /// Verify a received token fragment (8 chars) against the expected HMAC.
+  ///
+  /// Checks the current, previous, and next buckets (±30s tolerance)
+  /// to account for clock drift between student and faculty devices.
+  static bool verifyTokenFragment(
+      String sessionId, String secret, String receivedFragment) {
+    final currentBucket = currentTimeBucket();
+
+    for (int offset = -1; offset <= 1; offset++) {
+      final bucket = currentBucket + offset;
+      final message = '$sessionId:$bucket';
+      final key = utf8.encode(secret);
+      final hmacResult = Hmac(sha256, key).convert(utf8.encode(message));
+      final expectedFragment = hmacResult.toString().substring(0, 8);
+
+      if (expectedFragment == receivedFragment) return true;
+    }
+    return false;
+  }
+
+
   /// Encode student UID + HMAC token into BLE manufacturer data bytes.
   ///
   /// Format: [studentUid (first 8 chars, 8 bytes) | hmacToken (8 bytes)]

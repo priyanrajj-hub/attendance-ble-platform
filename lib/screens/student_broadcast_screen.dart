@@ -5,11 +5,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../ble/ble_advertiser.dart';
-import '../ble/ble_constants.dart';
 import '../services/session_service.dart';
 import '../services/token_service.dart';
 import '../models/attendance_session.dart';
-
 
 /// Student screen — finds the current active session, fetches the
 /// rotating HMAC token, and broadcasts a signed BLE payload.
@@ -176,7 +174,6 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen>
     }
   }
 
-
   Future<void> _terminateSession(String reason) async {
     await _advertiser.stopAdvertising();
     _tokenRefreshTimer?.cancel();
@@ -214,7 +211,7 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen>
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: _isBroadcasting
-                      ? Colors.green.withOpacity(0.1)
+                      ? Colors.green.withValues(alpha: 0.1)
                       : colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(16),
                   border: _isBroadcasting
@@ -228,7 +225,8 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen>
                           ? Icons.bluetooth_connected
                           : Icons.class_outlined,
                       size: 48,
-                      color: _isBroadcasting ? Colors.green : colorScheme.primary,
+                      color:
+                          _isBroadcasting ? Colors.green : colorScheme.primary,
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -265,8 +263,8 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen>
                   icon: const Icon(Icons.bluetooth),
                   label: const Padding(
                     padding: EdgeInsets.symmetric(vertical: 14),
-                    child: Text('Start Broadcast',
-                        style: TextStyle(fontSize: 16)),
+                    child:
+                        Text('Start Broadcast', style: TextStyle(fontSize: 16)),
                   ),
                 )
               else
@@ -282,9 +280,9 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen>
                       foregroundColor: colorScheme.error),
                 ),
             ] else ...[
-              Icon(Icons.search_off, size: 64, color: colorScheme.onSurfaceVariant),
+              Icon(Icons.search_off,
+                  size: 64, color: colorScheme.onSurfaceVariant),
             ],
-
             const SizedBox(height: 24),
             Text(
               _statusMessage,
@@ -296,7 +294,6 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen>
                     : colorScheme.onSurfaceVariant,
               ),
             ),
-
             if (!_searching && _session == null) ...[
               const SizedBox(height: 24),
               OutlinedButton.icon(

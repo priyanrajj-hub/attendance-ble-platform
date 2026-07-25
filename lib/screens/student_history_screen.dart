@@ -93,10 +93,10 @@ class _StudentHistoryScreenState extends State<StudentHistoryScreen> {
                     margin: const EdgeInsets.only(right: 12),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: percentColor.withOpacity(0.1),
+                      color: percentColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                          color: percentColor.withOpacity(0.3)),
+                          color: percentColor.withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,14 +181,12 @@ class _StudentHistoryScreenState extends State<StudentHistoryScreen> {
                         child: ListTile(
                           leading: CircleAvatar(
                             backgroundColor:
-                                statusColor.withOpacity(0.15),
-                            child:
-                                Icon(statusIcon, color: statusColor),
+                                statusColor.withValues(alpha: 0.15),
+                            child: Icon(statusIcon, color: statusColor),
                           ),
                           title: Text(
                             session.subjectName,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           subtitle: Text(
                             '${session.classId} · ${_formatDate(session.startTime)}',
@@ -197,7 +195,7 @@ class _StudentHistoryScreenState extends State<StudentHistoryScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.15),
+                              color: statusColor.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(

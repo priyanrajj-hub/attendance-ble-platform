@@ -29,14 +29,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
 
-  String _selectedRole = 'student';
   XFile? _profilePhoto;
   bool _loading = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   String? _errorMessage;
-
-  final _roles = const ['student', 'faculty', 'mentor'];
 
   @override
   void dispose() {
@@ -93,11 +90,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': _nameCtrl.text.trim(),
         'rollNo': _rollCtrl.text.trim(),
-        'role': _selectedRole,
+        'role': 'student',
         'email': _emailCtrl.text.trim(),
-        'parentEmail': _selectedRole == 'student'
-            ? _parentEmailCtrl.text.trim()
-            : null,
+        'parentEmail': _parentEmailCtrl.text.trim(),
         'photoUrl': photoUrl,
         'status': 'pending_verification',
         'createdAt': FieldValue.serverTimestamp(),
@@ -214,23 +209,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // ── Role selector ──
-                DropdownButtonFormField<String>(
-                  value: _selectedRole,
-                  decoration: const InputDecoration(
-                    labelText: 'Role',
-                    prefixIcon: Icon(Icons.school_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _roles
-                      .map((r) => DropdownMenuItem(
-                          value: r,
-                          child: Text(r[0].toUpperCase() + r.substring(1))))
-                      .toList(),
-                  onChanged: (v) => setState(() => _selectedRole = v ?? 'student'),
-                ),
-                const SizedBox(height: 14),
-
                 // ── College email ──
                 TextFormField(
                   controller: _emailCtrl,
@@ -252,27 +230,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // ── Parent email (students only) ──
-                if (_selectedRole == 'student') ...[
-                  TextFormField(
-                    controller: _parentEmailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Parent Email',
-                      prefixIcon: Icon(Icons.family_restroom),
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'Parent email is required for students.';
-                      }
-                      if (!v.contains('@')) return 'Enter a valid email.';
-                      return null;
-                    },
+                // ── Parent Email ──
+                TextFormField(
+                  controller: _parentEmailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Parent Email',
+                    prefixIcon: Icon(Icons.family_restroom),
+                    border: OutlineInputBorder(),
                   ),
-                  const SizedBox(height: 14),
-                ],
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Parent email is required.';
+                    }
+                    if (!v.contains('@')) return 'Enter a valid email.';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
 
                 // ── Password ──
                 TextFormField(

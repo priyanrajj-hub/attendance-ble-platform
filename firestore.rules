@@ -2,84 +2,93 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Reads directly from the Database instead of using Cloud Function Custom Claims
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     // ── Users collection ──────────────────────────────────────────
     match /users/{userId} {
-      // Any authenticated user can read their own document.
-      // Admins can read all user documents (for the approval screen).
+      
+      // Allow users to read their own doc REGARDLESS of email_verified 
+      // so the UI can source their name/role and show "Please verify email". 
+      // Allow Faculty and Admins full access to render rosters.
       allow read: if request.auth != null &&
-                     (request.auth.uid == userId ||
-                      request.auth.token.role == 'admin');
+                     (
+                       request.auth.uid == userId || 
+                       isAdmin() || 
+                       (request.auth.token.email_verified == true && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'faculty' && resource.data.role == 'student')
+                     );
 
-      // A user can create their own document (at registration).
-      allow create: if request.auth != null &&
-                       request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId &&
+          request.resource.data.keys().hasOnly(['name', 'rollNo', 'role', 'email', 'parentEmail', 'photoUrl', 'status', 'createdAt']) &&
+          request.resource.data.status == 'pending_verification' &&
+          request.resource.data.email == request.auth.token.email &&
+          (
+            (request.resource.data.role == 'student' &&
+             request.auth.token.email.matches('^[a-zA-Z0-9._-]+@ch\\.en\\.students\\.amrita\\.edu$'))
+            ||
+            (request.resource.data.role == 'faculty' &&
+             request.auth.token.email.matches('^[a-zA-Z0-9._-]+@ch\\.amrita\\.edu$'))
+          );
 
-      // A user can update their own document EXCEPT for
-      // sensitive fields (status, role).
-      allow update: if request.auth != null &&
-                       request.auth.uid == userId &&
-                       !request.resource.data.diff(resource.data)
-                           .affectedKeys()
-                           .hasAny(['status', 'role']);
+      // Block users from modifying role/status. 
+      allow update: if request.auth != null && request.auth.uid == userId &&
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'role']);
 
       // Admins can update any user document (approve/reject, set role).
-      allow update: if request.auth != null &&
-                       request.auth.token.role == 'admin';
+      allow update: if request.auth != null && isAdmin();
     }
 
     // ── Sessions collection ───────────────────────────────────────
     match /sessions/{sessionId} {
-      // Any authenticated user can read sessions (students need to find active ones).
-      allow read: if request.auth != null;
-
-      // Only faculty/mentor/admin can create sessions.
-      allow create: if request.auth != null;
-
-      // Only the session's faculty or an admin can update (close/expire).
-      allow update: if request.auth != null &&
-                       (resource.data.facultyId == request.auth.uid ||
-                        request.auth.token.role == 'admin');
-
+      allow read: if request.auth != null && request.auth.token.email_verified == true;
+      
+      allow create: if request.auth != null && request.auth.token.email_verified == true &&
+                       (
+                         (request.resource.data.facultyId == request.auth.uid && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'faculty')
+                         || isAdmin()
+                       );
+                       
+      allow update: if request.auth != null && request.auth.token.email_verified == true &&
+                       (
+                         (resource.data.facultyId == request.auth.uid &&
+                          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['facultyId']))
+                         || isAdmin()
+                       );
+      
       // Private subcollection containing details (hmacSecret) - only faculty owner or admin can read/write.
       match /private/details {
-        allow read: if request.auth != null &&
-                      (resource.data.facultyId == request.auth.uid ||
-                       request.auth.token.role == 'admin');
-        allow write: if request.auth != null &&
+        allow read: if request.auth != null && request.auth.token.email_verified == true &&
+                      (resource.data.facultyId == request.auth.uid || isAdmin());
+        allow write: if request.auth != null && request.auth.token.email_verified == true &&
                        ((resource == null && request.resource.data.facultyId == request.auth.uid) ||
-                        (resource != null && resource.data.facultyId == request.auth.uid) ||
-                        request.auth.token.role == 'admin');
+                        (resource != null && resource.data.facultyId == request.auth.uid) || isAdmin());
       }
 
-      // Attendance subcollection - no client writes, all updates must go through markAttendance Cloud Function
+      // Attendance subcollection - no client writes, all updates must go through markAttendance... 
+      // WAIT: we abandoned cloud functions! Client MUST be able to mark attendance.
       match /attendance/{studentId} {
-        // Faculty/admin can read all attendance records.
-        // Students can read their own record.
-        allow read: if request.auth != null &&
+        allow read: if request.auth != null && request.auth.token.email_verified == true &&
                       (request.auth.uid == studentId ||
                        get(/databases/$(database)/documents/sessions/$(sessionId)).data.facultyId == request.auth.uid ||
-                       request.auth.token.role == 'admin');
-
-        // Block all client writes (creates/updates/deletes)
-        allow write: if false;
+                       isAdmin());
+        // Students CANNOT write. The BLE architecture relies on the Faculty Scanner app pushing the attendance document.
+        allow write: if request.auth != null && request.auth.token.email_verified == true && 
+                      (get(/databases/$(database)/documents/sessions/$(sessionId)).data.facultyId == request.auth.uid || isAdmin());
       }
 
-      // Audit subcollection - read-only for admins, no client writes allowed
       match /audit/{auditId} {
-        allow read: if request.auth != null &&
-                       request.auth.token.role == 'admin';
+        allow read: if request.auth != null && request.auth.token.email_verified == true && isAdmin();
         allow write: if false;
       }
     }
 
     // ── Notifications collection ──────────────────────────────────
     match /notifications/{notificationId} {
-      // Students can read their own notifications.
-      allow read: if request.auth != null &&
+      allow read: if request.auth != null && request.auth.token.email_verified == true &&
                      resource.data.studentUid == request.auth.uid;
-
-      // Limit client creates; strip body/subject/recipients to prevent backend spoofing/spamming.
-      allow create: if request.auth != null &&
+      allow create: if request.auth != null && request.auth.token.email_verified == true &&
                        request.resource.data.studentUid == request.auth.uid &&
                        !request.resource.data.keys().hasAny(['recipients', 'body', 'subject', 'status']);
     }

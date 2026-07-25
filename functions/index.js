@@ -40,6 +40,68 @@ function verifyToken(sessionId, secret, receivedTokenFragment) {
 }
 
 /**
+ * Callable: starts a new session, restricted to Faculty, Mentor or Admin roles.
+ */
+exports.startSession = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  const { classId, subjectName, durationMinutes } = data;
+  if (!classId || !subjectName) {
+    throw new functions.https.HttpsError("invalid-argument", "Class ID and subject name are required.");
+  }
+
+  // Look up user's role from users/{uid}
+  const callerDoc = await admin.firestore().collection("users").doc(context.auth.uid).get();
+  if (!callerDoc.exists) {
+    throw new functions.https.HttpsError("permission-denied", "User profile not found.");
+  }
+  const callerData = callerDoc.data() || {};
+  const callerRole = callerData.role;
+  const isFaculty = callerRole === "faculty";
+  const isMentor = callerRole === "mentor";
+  const isAdmin = context.auth.token.role === "admin" || callerRole === "admin";
+
+  if (!isFaculty && !isMentor && !isAdmin) {
+    throw new functions.https.HttpsError("permission-denied", "Unauthorized to start a session.");
+  }
+
+  const duration = parseInt(durationMinutes, 10) || 5;
+  const now = admin.firestore.Timestamp.now();
+  const endTimeDate = new Date(now.toDate().getTime() + duration * 60000);
+  const endTime = admin.firestore.Timestamp.fromDate(endTimeDate);
+
+  // Generate private hmacSecret natively (url-safe base64 logic)
+  const base64Secret = crypto.randomBytes(32).toString('base64');
+  const hmacSecret = base64Secret
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+
+  const db = admin.firestore();
+  const sessionRef = db.collection("sessions").doc();
+  const sessionId = sessionRef.id;
+
+  // Write session doc without hmacSecret
+  await sessionRef.set({
+    classId: classId,
+    subjectName: subjectName,
+    facultyId: context.auth.uid,
+    startTime: now,
+    endTime: endTime,
+    status: "active"
+  });
+
+  // Write private details subcollection doc
+  await sessionRef.collection("private").doc("details").set({
+    hmacSecret: hmacSecret,
+    facultyId: context.auth.uid
+  });
+
+  return { sessionId };
+});
+
+/**
  * Callable: students retrieve the current BLE rotating token for a session.
  */
 exports.getStudentToken = functions.https.onCall(async (data, context) => {
@@ -380,3 +442,30 @@ exports.expireSessions = functions.pubsub
     console.log(`Expired ${expiredSessions.size} sessions.`);
     return null;
   });
+
+/**
+ * Trigger: fires on writes to any user document to propagate updates to Custom Claims.
+ */
+exports.onUserWrite = functions.firestore
+  .document("users/{userId}")
+  .onWrite(async (change, context) => {
+    const { userId } = context.params;
+    const afterData = change.after.exists ? change.after.data() : null;
+
+    if (!afterData) {
+      // User deleted, revoke claims
+      return null;
+    }
+
+    const role = afterData.role || "student";
+
+    try {
+      await admin.auth().setCustomUserClaims(userId, { role });
+      console.log(`Custom claim 'role' set to '${role}' for user ${userId}`);
+    } catch (error) {
+      console.error(`Failed to set custom claim for user ${userId}:`, error);
+    }
+
+    return null;
+  });
+

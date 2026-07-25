@@ -36,10 +36,8 @@ class RoleSelectScreen extends StatelessWidget {
         ],
       ),
       body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('users')
-            .doc(user?.uid)
-            .get(),
+        future:
+            FirebaseFirestore.instance.collection('users').doc(user?.uid).get(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -194,7 +192,7 @@ class _ActionCard extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: color.withOpacity(0.15),
+                backgroundColor: color.withValues(alpha: 0.15),
                 child: Icon(icon, color: color),
               ),
               const SizedBox(width: 16),

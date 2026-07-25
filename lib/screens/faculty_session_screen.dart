@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/session_service.dart';
-import '../services/token_service.dart';
 import '../models/attendance_session.dart';
 import 'faculty_scan_screen.dart';
 import 'session_history_screen.dart';
@@ -134,22 +133,23 @@ class _FacultySessionScreenState extends State<FacultySessionScreen> {
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: 'Session History',
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const SessionHistoryScreen())),
+            onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const SessionHistoryScreen())),
           ),
         ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
-        child: hasActive ? _buildActiveSession(colorScheme) : _buildNewSession(colorScheme),
+        child: hasActive
+            ? _buildActiveSession(colorScheme)
+            : _buildNewSession(colorScheme),
       ),
     );
   }
 
   Widget _buildActiveSession(ColorScheme colorScheme) {
-    final currentToken =
-        TokenService.generateToken(_activeSession!.sessionId, _activeSession!.hmacSecret);
-
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -187,32 +187,6 @@ class _FacultySessionScreenState extends State<FacultySessionScreen> {
               Text(
                 '${_activeSession!.subjectName} · ${_activeSession!.classId}',
                 style: TextStyle(color: colorScheme.onPrimaryContainer),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Current rotating token (debug info, hidden in production)
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.key, size: 16, color: colorScheme.onSurfaceVariant),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Token: $currentToken',
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
               ),
             ],
           ),
@@ -311,8 +285,7 @@ class _FacultySessionScreenState extends State<FacultySessionScreen> {
                     .map((m) =>
                         DropdownMenuItem(value: m, child: Text('$m minutes')))
                     .toList(),
-                onChanged: (v) =>
-                    setState(() => _durationMinutes = v ?? 5),
+                onChanged: (v) => setState(() => _durationMinutes = v ?? 5),
               ),
             ],
           ),
@@ -326,8 +299,10 @@ class _FacultySessionScreenState extends State<FacultySessionScreen> {
           ),
           child: _loading
               ? const SizedBox(
-                  height: 20, width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
                 )
               : const Text('Start Session', style: TextStyle(fontSize: 16)),
         ),
