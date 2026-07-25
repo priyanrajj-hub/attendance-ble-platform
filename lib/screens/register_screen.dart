@@ -184,8 +184,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     border: const OutlineInputBorder(),
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty)
+                    if (v == null || v.trim().isEmpty) {
                       return 'Email is required.';
+                    }
                     if (widget.role == 'student' &&
                         !_authService.isStudentDomain(v)) {
                       return 'Use your ${AuthService.studentDomain} email';
@@ -263,8 +264,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   validator: (v) {
-                    if (v != _passwordCtrl.text)
+                    if (v != _passwordCtrl.text) {
                       return 'Passwords do not match.';
+                    }
                     return null;
                   },
                 ),
