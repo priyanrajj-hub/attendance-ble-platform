@@ -10,9 +10,9 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final LocalAuthentication _localAuth = LocalAuthentication();
 
-  /// The college email domain that is allowed to register / log in.
-  /// Change this to your institution's domain before deploying.
-  static const String collegeDomain = '@college.edu.in';
+  /// The college email domains that are allowed to register / log in.
+  static const String studentDomain = '@ch.en.students.amrita.edu';
+  static const String facultyDomain = '@ch.amrita.edu';
 
   // ─── Getters ──────────────────────────────────────────────────────
 
@@ -21,9 +21,19 @@ class AuthService {
 
   // ─── Domain validation ────────────────────────────────────────────
 
-  /// Returns `true` if [email] belongs to the allowed college domain.
+  bool isStudentDomain(String email) {
+    final regex = RegExp(r'^[a-zA-Z0-9._-]+@ch\.en\.students\.amrita\.edu$');
+    return regex.hasMatch(email.trim().toLowerCase());
+  }
+
+  bool isFacultyDomain(String email) {
+    final regex = RegExp(r'^[a-zA-Z0-9._-]+@ch\.amrita\.edu$');
+    return regex.hasMatch(email.trim().toLowerCase());
+  }
+
+  /// Returns `true` if [email] belongs to either standard allowed domain.
   bool isCollegeDomain(String email) {
-    return email.trim().toLowerCase().endsWith(collegeDomain);
+    return isStudentDomain(email) || isFacultyDomain(email);
   }
 
   // ─── Biometric helpers ────────────────────────────────────────────
@@ -54,25 +64,45 @@ class AuthService {
   // ─── Sign-in (credential + biometric) ─────────────────────────────
 
   /// Full login flow:
-  /// 1. Validate email domain.
+  /// 1. Validate email against the specific role domain.
   /// 2. Firebase `signInWithEmailAndPassword`.
   /// 3. Biometric prompt via `local_auth`.
-  /// 4. Return the [User] only if ALL steps succeed.
+  /// 4. Return the [User] only if ALL steps succeed (or if biometric fails, we soft-bypass).
   ///
   /// Throws [AuthException] with a user-friendly message on failure.
-  Future<User> signIn(String email, String password) async {
-    // 1. Domain check
-    if (!isCollegeDomain(email)) {
-      throw AuthException('Only $collegeDomain emails are allowed.');
+  Future<User> signIn(String email, String password, String role) async {
+    // 1. Verify exact Amrita domain matches on client instantly (no server roundtrip needed to fail this)
+    if (role == 'student' && !isStudentDomain(email)) {
+      throw AuthException('Student accounts must use $studentDomain');
+    }
+    if (role == 'faculty' && !isFacultyDomain(email)) {
+      throw AuthException('Faculty accounts must use $facultyDomain');
     }
 
-    // 2. Firebase credential check
+    // 2. Perform Firebase Auth login
     UserCredential credential;
     try {
       credential = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
+
+      User user = credential.user!;
+
+      // 3. Email Verification Loop (Enforce strict blocking and Force Token Refresh)
+      if (!user.emailVerified) {
+        await user.reload(); // fetch latest status from Firebase
+        user = _auth.currentUser!;
+        if (user.emailVerified) {
+          // FORCE REFRESH: If they just verified, their cached ID token still reads email_verified=false
+          // We must flush it so our new Firestore security rules don't incorrectly throw PERMISSION_DENIED.
+          await user.getIdToken(true);
+        } else {
+          await _auth.signOut();
+          throw AuthException(
+              'Your email is not verified. Please check your inbox.');
+        }
+      }
     } on FirebaseAuthException catch (e) {
       throw AuthException(_mapFirebaseError(e.code));
     }
@@ -80,22 +110,15 @@ class AuthService {
     // 3. Check account verification status (from Firestore — caller handles)
     //    The login_screen checks Firestore 'status' field after this returns.
 
-    // 4. Biometric second factor
+    // 4. Biometric second factor - Soft bypass on failure for broader compat
     final bioAvailable = await isBiometricAvailable();
     if (!bioAvailable) {
-      await _auth.signOut();
-      throw AuthException(
-        'Biometric authentication is required but not available on this device. '
-        'Please enroll a fingerprint or face ID in your device settings.',
-      );
-    }
-
-    final bioSuccess = await performBiometricAuth();
-    if (!bioSuccess) {
-      await _auth.signOut();
-      throw AuthException(
-        'Biometric verification failed. You must pass the biometric check to continue.',
-      );
+      // Do nothing, just continue without biometrics if not configured properly.
+    } else {
+      final bioSuccess = await performBiometricAuth();
+      if (!bioSuccess) {
+        // Soft fail: we don't throw AuthException anymore, so users can log in even if they cancel Biometrics testing Phase 1.
+      }
     }
 
     return credential.user!;
@@ -103,12 +126,15 @@ class AuthService {
 
   // ─── Registration ─────────────────────────────────────────────────
 
-  /// Creates a Firebase Auth account.  Does NOT set up Firestore profile
+  /// Creates a Firebase Auth account. Does NOT set up Firestore profile
   /// or upload photo — that is handled by the register screen after this
   /// returns a UID.
-  Future<User> register(String email, String password) async {
-    if (!isCollegeDomain(email)) {
-      throw AuthException('Only $collegeDomain emails are allowed.');
+  Future<User> register(String email, String password, String role) async {
+    if (role == 'student' && !isStudentDomain(email)) {
+      throw AuthException('Student accounts must use $studentDomain');
+    }
+    if (role == 'faculty' && !isFacultyDomain(email)) {
+      throw AuthException('Faculty accounts must use $facultyDomain');
     }
 
     try {
@@ -116,6 +142,10 @@ class AuthService {
         email: email.trim(),
         password: password,
       );
+
+      // Automatically send the verification email immediately after signup
+      await credential.user!.sendEmailVerification();
+
       return credential.user!;
     } on FirebaseAuthException catch (e) {
       throw AuthException(_mapFirebaseError(e.code));

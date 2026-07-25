@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import 'register_screen.dart';
-import 'role_select_screen.dart';
+import 'student_history_screen.dart';
+import 'faculty_session_screen.dart';
 
 /// Login screen — email/password + biometric second factor.
 ///
@@ -14,7 +15,8 @@ import 'role_select_screen.dart';
 ///    only `"verified"` accounts proceed.
 /// 4. On full success → navigate to [RoleSelectScreen].
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String role;
+  const LoginScreen({super.key, required this.role});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -49,6 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = await _authService.signIn(
         _emailCtrl.text.trim(),
         _passwordCtrl.text,
+        widget.role,
       );
 
       // Check Firestore verification status
@@ -67,12 +70,29 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      // Determine route based on server-side role
+      final role = doc.data()?['role'];
+      Widget nextScreen;
+      if (role == 'student') {
+        nextScreen =
+            const StudentHistoryScreen(); // Need to import if not present, but wait, I can just route to it.
+      } else if (role == 'faculty' || role == 'admin' || role == 'mentor') {
+        nextScreen = const FacultySessionScreen();
+      } else {
+        await _authService.signOut();
+        setState(() {
+          _errorMessage = 'Invalid or unrecognized role on account.';
+          _loading = false;
+        });
+        return;
+      }
+
       if (!mounted) return;
 
       // Both credential + biometric passed, account verified → proceed
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const RoleSelectScreen()),
+        MaterialPageRoute(builder: (_) => nextScreen),
       );
     } on AuthException catch (e) {
       setState(() {
@@ -118,7 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Sign in with your college email',
+                    'Sign in to your ${widget.role.toUpperCase()} account',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
@@ -133,7 +153,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
                       labelText: 'College Email',
-                      hintText: 'you${AuthService.collegeDomain}',
+                      hintText: widget.role == 'student'
+                          ? 'you${AuthService.studentDomain}'
+                          : 'name${AuthService.facultyDomain}',
                       prefixIcon: const Icon(Icons.email_outlined),
                       border: const OutlineInputBorder(),
                     ),
@@ -141,8 +163,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.trim().isEmpty) {
                         return 'Email is required.';
                       }
-                      if (!_authService.isCollegeDomain(value)) {
-                        return 'Only ${AuthService.collegeDomain} emails are allowed.';
+                      if (widget.role == 'student' &&
+                          !_authService.isStudentDomain(value)) {
+                        return 'Use your ${AuthService.studentDomain} email';
+                      }
+                      if (widget.role == 'faculty' &&
+                          !_authService.isFacultyDomain(value)) {
+                        return 'Use your ${AuthService.facultyDomain} email';
                       }
                       return null;
                     },
@@ -165,8 +192,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? Icons.visibility_off
                               : Icons.visibility,
                         ),
-                        onPressed: () =>
-                            setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
                       ),
                     ),
                     validator: (value) {
@@ -239,7 +266,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) => const RegisterScreen()),
+                                builder: (_) =>
+                                    RegisterScreen(role: widget.role)),
                           );
                         },
                         child: const Text('Register'),

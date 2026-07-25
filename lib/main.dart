@@ -3,9 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
-import 'screens/login_screen.dart';
-import 'screens/register_screen.dart';
-import 'screens/role_select_screen.dart';
+import 'screens/portal_gate_screen.dart';
 import 'screens/admin_approval_screen.dart';
 
 /// NOTE: After running `flutterfire configure`, import firebase_options.dart:
@@ -55,11 +53,9 @@ class AttendanceBleTestApp extends StatelessWidget {
         brightness: Brightness.dark,
       ),
       themeMode: ThemeMode.system,
-      initialRoute: '/login',
+      initialRoute: '/',
       routes: {
-        '/login': (_) => const LoginScreen(),
-        '/register': (_) => const RegisterScreen(),
-        '/role-select': (_) => const RoleSelectScreen(),
+        '/': (_) => const PortalGateScreen(),
         '/admin': (_) => const AdminApprovalScreen(),
       },
     );
