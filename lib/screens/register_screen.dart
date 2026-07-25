@@ -72,7 +72,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'email': _emailCtrl.text.trim(),
         'parentEmail': _parentEmailCtrl.text.trim(),
         'photoUrl': photoUrl,
-        'status': 'pending_verification',
+        'status': 'verified',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -87,10 +87,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
           icon: const Icon(Icons.check_circle, color: Colors.green, size: 48),
-          title: const Text('Registration Submitted'),
+          title: const Text('Registration Successful'),
           content: const Text(
-            'Your account has been created and is pending admin verification. '
-            'You will be able to log in once an administrator approves your account.',
+            'Your account has been created. You can now log into the application directly.',
           ),
           actions: [
             FilledButton(
