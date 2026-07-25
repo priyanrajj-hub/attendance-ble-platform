@@ -26,7 +26,7 @@ service cloud.firestore {
           request.resource.data.email == request.auth.token.email &&
           (
             (request.resource.data.role == 'student' &&
-             request.auth.token.email.matches('^[a-zA-Z0-9._-]+@ch\\.en\\.students\\.amrita\\.edu$'))
+             request.auth.token.email.matches('^[a-zA-Z0-9._-]+@ch\\.students\\.amrita\\.edu$'))
             ||
             (request.resource.data.role == 'faculty' &&
              request.auth.token.email.matches('^[a-zA-Z0-9._-]+@ch\\.amrita\\.edu$'))
