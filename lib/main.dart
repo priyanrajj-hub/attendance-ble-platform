@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'screens/portal_gate_screen.dart';
 import 'screens/admin_approval_screen.dart';
 
@@ -13,18 +11,6 @@ Future<void> main() async {
 
   // Initialize Firebase.
   await Firebase.initializeApp();
-
-  // Configure local Firebase Emulators in debug mode only.
-  if (kDebugMode) {
-    // Replace with your actual local computer IP address (e.g. '192.168.1.15') if testing on physical phone.
-    // On web/desktop platforms, 'localhost' is automatically supported.
-    const String localComputerIp = '192.168.1.15';
-    final host = kIsWeb ? 'localhost' : localComputerIp;
-
-    await FirebaseAuth.instance.useAuthEmulator(host, 9099);
-    debugPrint(
-        'Local emulators initialized for Auth (9099) at $host. Firestore remains connected to the cloud.');
-  }
 
   runApp(const AttendanceBleTestApp());
 }
