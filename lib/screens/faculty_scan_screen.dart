@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../ble/ble_scanner.dart';
 import '../ble/ble_constants.dart';
 import '../models/attendance_session.dart';
@@ -126,9 +127,22 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
     student.markedPresent = true;
 
     try {
+      // Reverse-lookup the 8-char uidPrefix to the full Firebase UID
+      final qSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('uidPrefix', isEqualTo: uidPrefix)
+          .limit(1)
+          .get();
+
+      if (qSnap.docs.isEmpty) {
+        throw Exception('Could not resolve full UID for prefix check.');
+      }
+
+      final fullUid = qSnap.docs.first.id;
+
       await _sessionService.markPresent(
         sessionId: widget.session.sessionId,
-        studentUid: uidPrefix,
+        studentUid: fullUid,
         hmacToken: tokenFragment,
         rssi: rssi,
         scanCount: student.scanCount,

@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import '../models/attendance_session.dart';
 import '../models/attendance_record.dart';
+import 'token_service.dart';
 
 /// Manages attendance sessions and records in Firestore.
 class SessionService {
@@ -20,23 +20,29 @@ class SessionService {
     final user = _auth.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
-    final result =
-        await FirebaseFunctions.instance.httpsCallable('startSession').call({
+    // Generate unique ID and secret locally
+    final sessionRef = _firestore.collection('sessions').doc();
+    final sessionId = sessionRef.id;
+    final hmacSecret = TokenService.generateSessionSecret();
+
+    final now = DateTime.now();
+    final endTime = now.add(Duration(minutes: durationMinutes));
+
+    // Write public session data
+    await sessionRef.set({
       'classId': classId,
       'subjectName': subjectName,
-      'durationMinutes': durationMinutes,
+      'facultyId': user.uid,
+      'startTime': Timestamp.fromDate(now),
+      'endTime': Timestamp.fromDate(endTime),
+      'status': 'active',
     });
 
-    final sessionId = result.data['sessionId'] as String;
-
-    // Fetch the hmacSecret from the private details subcollection (faculty has read permission)
-    final secretDoc = await _firestore
-        .collection('sessions')
-        .doc(sessionId)
-        .collection('private')
-        .doc('details')
-        .get();
-    final hmacSecret = secretDoc.data()?['hmacSecret'] as String? ?? '';
+    // Write private hmacSecret
+    await sessionRef.collection('private').doc('details').set({
+      'hmacSecret': hmacSecret,
+      'facultyId': user.uid,
+    });
 
     // Fetch the public session details
     final sessionDoc =
@@ -155,7 +161,6 @@ class SessionService {
 
   // ─── Attendance records ───────────────────────────────────────────
 
-  /// Mark a student as present (called after HMAC verification + RSSI check).
   Future<void> markPresent({
     required String sessionId,
     required String studentUid,
@@ -163,28 +168,51 @@ class SessionService {
     required int rssi,
     required int scanCount,
   }) async {
-    // Call the Cloud Function markAttendance (verifies HMAC, RSSI, scanCount on the server-side)
-    await FirebaseFunctions.instance.httpsCallable('markAttendance').call({
-      'sessionId': sessionId,
-      'studentUid': studentUid,
-      'hmacToken': hmacToken,
+    // Fetch hmacSecret from the private details subcollection (faculty has read permission)
+    final secretDoc = await _firestore
+        .collection('sessions')
+        .doc(sessionId)
+        .collection('private')
+        .doc('details')
+        .get();
+
+    final hmacSecret = secretDoc.data()?['hmacSecret'] as String? ?? '';
+
+    // Verify HMAC client-side
+    final isValid =
+        TokenService.verifyTokenFragment(sessionId, hmacSecret, hmacToken);
+    if (!isValid) {
+      throw Exception('Invalid HMAC token for student: $studentUid');
+    }
+
+    // Direct Firestore write for attendance
+    await _firestore
+        .collection('sessions')
+        .doc(sessionId)
+        .collection('attendance')
+        .doc(studentUid)
+        .set({
+      'status': 'present',
       'rssi': rssi,
       'scanCount': scanCount,
+      'markedAt': FieldValue.serverTimestamp(),
     });
   }
 
-  /// Edit an attendance record (faculty: present↔absent, mentor: can set OD).
-  /// Edit an attendance record via Cloud Function (restricted by Faculty/Mentor roles).
+  /// Edit an attendance record via direct Firestore write (restricted by Faculty/Admin roles).
   Future<void> editAttendance({
     required String sessionId,
     required String studentUid,
     required String newStatus,
   }) async {
-    // Call the Cloud Function editAttendance
-    await FirebaseFunctions.instance.httpsCallable('editAttendance').call({
-      'sessionId': sessionId,
-      'studentUid': studentUid,
-      'newStatus': newStatus,
+    // Direct Firestore update for attendance
+    await _firestore
+        .collection('sessions')
+        .doc(sessionId)
+        .collection('attendance')
+        .doc(studentUid)
+        .update({
+      'status': newStatus,
     });
   }
 
