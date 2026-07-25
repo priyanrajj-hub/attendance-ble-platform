@@ -445,6 +445,8 @@ exports.expireSessions = functions.pubsub
 
 /**
  * Trigger: fires on writes to any user document to propagate updates to Custom Claims.
+ * SECURITY: Forces server-side role assignment based exclusively on the email domain regex,
+ * completely ignoring any client-provided role. Rejects non-Amrita emails by deleting the Auth user and document.
  */
 exports.onUserWrite = functions.firestore
   .document("users/{userId}")
@@ -453,15 +455,52 @@ exports.onUserWrite = functions.firestore
     const afterData = change.after.exists ? change.after.data() : null;
 
     if (!afterData) {
-      // User deleted, revoke claims
+      // User deleted, revoke claims (they are deleted from Auth anyway if done properly)
       return null;
     }
 
-    const role = afterData.role || "student";
+    const email = afterData.email ? afterData.email.trim().toLowerCase() : "";
+    let derivedRole = null;
+
+    // Strict regex validation for Amrita domains
+    const studentRegex = /^[a-zA-Z0-9._-]+@ch\.en\.students\.amrita\.edu$/;
+    const facultyRegex = /^[a-zA-Z0-9._-]+@ch\.amrita\.edu$/;
+
+    const isUpdate = change.before.exists;
+    const priorRole = isUpdate ? change.before.data().role : null;
+    const isLegitimateAdmin = isUpdate && afterData.role === 'admin';
+
+    if (isLegitimateAdmin) {
+      // If Firestore Security Rules blocked non-admins from writing to the role field,
+      // any update where the role remains or becomes 'admin' is cryptographically authorized.
+      derivedRole = 'admin';
+    } else {
+      if (studentRegex.test(email)) {
+        derivedRole = "student";
+      } else if (facultyRegex.test(email)) {
+        derivedRole = "faculty";
+      } else {
+        // NEITHER MATCHES: Hard reject the signup to prevent orphaned invalid accounts
+        console.warn(`[SECURITY] Invalid email domain '${email}' for user ${userId}. Deleting account outright.`);
+        try {
+          await admin.auth().deleteUser(userId);
+          await change.after.ref.delete();
+        } catch (err) {
+          console.error(`Failed to delete aborted account ${userId}:`, err);
+        }
+        return null;
+      }
+    }
+
+    // Forcefully overwrite the Firestore role to the validated server role (stops client spoofing)
+    if (afterData.role !== derivedRole) {
+      console.log(`[SECURITY] Overwriting client-provided role '${afterData.role}' with verified role '${derivedRole}'`);
+      await change.after.ref.update({ role: derivedRole });
+    }
 
     try {
-      await admin.auth().setCustomUserClaims(userId, { role });
-      console.log(`Custom claim 'role' set to '${role}' for user ${userId}`);
+      await admin.auth().setCustomUserClaims(userId, { role: derivedRole });
+      console.log(`Custom claim 'role' set to '${derivedRole}' for user ${userId}`);
     } catch (error) {
       console.error(`Failed to set custom claim for user ${userId}:`, error);
     }

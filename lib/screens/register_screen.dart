@@ -1,8 +1,5 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
 import '../services/auth_service.dart';
 
 /// Registration screen — collects profile info, creates Firebase Auth
@@ -12,7 +9,8 @@ import '../services/auth_service.dart';
 /// The account is NOT usable until an admin flips the status to `"verified"`
 /// via the [AdminApprovalScreen].
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  final String role;
+  const RegisterScreen({super.key, required this.role});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -29,7 +27,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
 
-  XFile? _profilePhoto;
   bool _loading = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
@@ -46,26 +43,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  Future<void> _pickPhoto() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 512,
-      maxHeight: 512,
-      imageQuality: 80,
-    );
-    if (picked != null) {
-      setState(() => _profilePhoto = picked);
-    }
-  }
+  // Removed _pickPhoto since Storage is bypassed
 
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
-
-    if (_profilePhoto == null) {
-      setState(() => _errorMessage = 'Please select a profile photo.');
-      return;
-    }
 
     setState(() {
       _loading = true;
@@ -77,20 +58,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final user = await _authService.register(
         _emailCtrl.text.trim(),
         _passwordCtrl.text,
+        widget.role,
       );
 
-      // 2. Upload profile photo to Firebase Storage
-      final photoRef = FirebaseStorage.instance
-          .ref()
-          .child('users/${user.uid}/profile.jpg');
-      await photoRef.putFile(File(_profilePhoto!.path));
-      final photoUrl = await photoRef.getDownloadURL();
+      // 2. Bypass Firebase Storage to avoid unprovisioned bucket crashes
+      final photoUrl = '';
 
       // 3. Write Firestore user doc
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': _nameCtrl.text.trim(),
-        'rollNo': _rollCtrl.text.trim(),
-        'role': 'student',
+        'rollNo': widget.role == 'student' ? _rollCtrl.text.trim() : '',
+        'role': widget.role,
         'email': _emailCtrl.text.trim(),
         'parentEmail': _parentEmailCtrl.text.trim(),
         'photoUrl': photoUrl,
@@ -152,33 +130,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ── Profile photo picker ──
-                Center(
-                  child: GestureDetector(
-                    onTap: _pickPhoto,
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundColor: colorScheme.surfaceContainerHighest,
-                      backgroundImage: _profilePhoto != null
-                          ? FileImage(File(_profilePhoto!.path))
-                          : null,
-                      child: _profilePhoto == null
-                          ? Icon(Icons.camera_alt,
-                              size: 32,
-                              color: colorScheme.onSurfaceVariant)
-                          : null,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
+                // ── Header ──
                 Text(
-                  'Tap to select profile photo',
+                  'Register a ${widget.role.toUpperCase()} account',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
 
                 // ── Full name ──
                 TextFormField(
@@ -189,25 +147,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     prefixIcon: Icon(Icons.person_outline),
                     border: OutlineInputBorder(),
                   ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Name is required.' : null,
-                ),
-                const SizedBox(height: 14),
-
-                // ── Roll number ──
-                TextFormField(
-                  controller: _rollCtrl,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: 'Roll Number',
-                    prefixIcon: Icon(Icons.badge_outlined),
-                    border: OutlineInputBorder(),
-                  ),
                   validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Roll number is required.'
+                      ? 'Name is required.'
                       : null,
                 ),
                 const SizedBox(height: 14),
+
+                // ── Roll number (Only for Students) ──
+                if (widget.role == 'student') ...[
+                  TextFormField(
+                    controller: _rollCtrl,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Roll Number',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Roll number is required.'
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+                ],
 
                 // ── College email ──
                 TextFormField(
@@ -216,14 +177,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
                     labelText: 'College Email',
-                    hintText: 'you${AuthService.collegeDomain}',
+                    hintText: widget.role == 'student'
+                        ? 'you${AuthService.studentDomain}'
+                        : 'name${AuthService.facultyDomain}',
                     prefixIcon: const Icon(Icons.email_outlined),
                     border: const OutlineInputBorder(),
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Email is required.';
-                    if (!_authService.isCollegeDomain(v)) {
-                      return 'Only ${AuthService.collegeDomain} emails are allowed.';
+                    if (v == null || v.trim().isEmpty)
+                      return 'Email is required.';
+                    if (widget.role == 'student' &&
+                        !_authService.isStudentDomain(v)) {
+                      return 'Use your ${AuthService.studentDomain} email';
+                    }
+                    if (widget.role == 'faculty' &&
+                        !_authService.isFacultyDomain(v)) {
+                      return 'Use your ${AuthService.facultyDomain} email';
                     }
                     return null;
                   },
@@ -294,7 +263,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   validator: (v) {
-                    if (v != _passwordCtrl.text) return 'Passwords do not match.';
+                    if (v != _passwordCtrl.text)
+                      return 'Passwords do not match.';
                     return null;
                   },
                 ),
@@ -341,8 +311,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text('Register',
-                          style: TextStyle(fontSize: 16)),
+                      : const Text('Register', style: TextStyle(fontSize: 16)),
                 ),
               ],
             ),

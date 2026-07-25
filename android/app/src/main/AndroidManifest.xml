@@ -1,4 +1,6 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Required on Android 12+ (API 31+) -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
@@ -44,6 +46,8 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Remove ProfileInstaller DUMP permission leaked into release -->
+        <receiver tools:node="remove" android:name="androidx.profileinstaller.ProfileInstallReceiver" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
