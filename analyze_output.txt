@@ -1,0 +1,23 @@
+﻿Analyzing attendance_ble_test...                                
+
+warning - The URI 'package:flutter_lints/flutter.yaml' included in 'D:\New folder - Copy (9)\attendance_ble_test\analysis_options.yaml' can't be found when analyzing 'D:\New folder - Copy (9)\attendance_ble_test' - analysis_options.yaml:10:10 - include_file_not_found
+warning - Unused import: 'package:cloud_firestore/cloud_firestore.dart'. Try removing the import directive - lib\main.dart:3:8 - unused_import
+warning - Unused import: 'dart:convert'. Try removing the import directive - lib\screens\faculty_scan_screen.dart:2:8 - unused_import
+warning - Unused import: '../models/attendance_record.dart'. Try removing the import directive - lib\screens\faculty_scan_screen.dart:9:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\faculty_scan_screen.dart:163:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\faculty_scan_screen.dart:241:58 - deprecated_member_use
+warning - A value for optional parameter 'markedPresent' isn't ever given. Try removing the unused parameter - lib\screens\faculty_scan_screen.dart:324:10 - unused_element_parameter
+warning - Unused import: '../services/token_service.dart'. Try removing the import directive - lib\screens\faculty_session_screen.dart:4:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\role_select_screen.dart:197:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\session_history_screen.dart:41:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\session_history_screen.dart:42:39 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\session_history_screen.dart:144:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\session_history_screen.dart:174:44 - deprecated_member_use
+warning - Unused import: '../ble/ble_constants.dart'. Try removing the import directive - lib\screens\student_broadcast_screen.dart:8:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\student_broadcast_screen.dart:217:38 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\student_history_screen.dart:96:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\student_history_screen.dart:99:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\student_history_screen.dart:184:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\student_history_screen.dart:200:50 - deprecated_member_use
+warning - Unused import: 'token_service.dart'. Try removing the import directive - lib\services\session_service.dart:6:8 - unused_import
+

@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../ble/ble_scanner.dart';
 import '../ble/ble_constants.dart';
 import '../models/attendance_session.dart';
-import '../models/attendance_record.dart';
+
 import '../services/session_service.dart';
 import '../services/token_service.dart';
 
@@ -86,13 +85,12 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
     final decoded = TokenService.decodeBlePayload(bytes);
     if (decoded == null) return;
 
-    // Verify the HMAC token against the session secret
-    // We only have a fragment (8 chars) — compare first 8 chars of the full token
-    final expectedToken = TokenService.generateToken(
-        widget.session.sessionId, widget.session.hmacSecret);
-    final expectedFragment = expectedToken.substring(0, 8);
-
-    final tokenValid = decoded.tokenFragment == expectedFragment;
+    // Verify the HMAC token against the session secret with clock drift tolerance
+    final tokenValid = TokenService.verifyTokenFragment(
+      widget.session.sessionId,
+      widget.session.hmacSecret,
+      decoded.tokenFragment,
+    );
 
     setState(() {
       final existing = _detected[decoded.uidPrefix];
@@ -120,7 +118,8 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
     }
   }
 
-  Future<void> _markPresent(String uidPrefix, int rssi, String tokenFragment) async {
+  Future<void> _markPresent(
+      String uidPrefix, int rssi, String tokenFragment) async {
     final student = _detected[uidPrefix];
     if (student == null || student.markedPresent) return;
 
@@ -139,7 +138,6 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
     }
     if (mounted) setState(() {});
   }
-
 
   Future<void> _stopScan() async {
     await FlutterBluePlus.stopScan();
@@ -161,7 +159,7 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
         actions: [
           Chip(
             label: Text('$presentCount present'),
-            backgroundColor: Colors.green.withOpacity(0.2),
+            backgroundColor: Colors.green.withValues(alpha: 0.2),
           ),
           const SizedBox(width: 8),
         ],
@@ -183,7 +181,7 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
                     height: 16,
                     width: 16,
                     child: CircularProgressIndicator(
-                      strokeWidth: 2, color: colorScheme.primary),
+                        strokeWidth: 2, color: colorScheme.primary),
                   ),
                   const SizedBox(width: 8),
                   Text('Scanning for student devices...',
@@ -239,7 +237,8 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: statusColor.withOpacity(0.15),
+                            backgroundColor:
+                                statusColor.withValues(alpha: 0.15),
                             child: Icon(
                               s.markedPresent
                                   ? Icons.check
@@ -314,7 +313,7 @@ class _DetectedStudent {
   int lastRssi;
   DateTime lastSeen;
   bool tokenValid;
-  bool markedPresent;
+  bool markedPresent = false;
 
   _DetectedStudent({
     required this.uidPrefix,
@@ -322,6 +321,5 @@ class _DetectedStudent {
     required this.lastRssi,
     required this.lastSeen,
     required this.tokenValid,
-    this.markedPresent = false,
   });
 }

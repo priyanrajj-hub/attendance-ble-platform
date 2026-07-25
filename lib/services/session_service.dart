@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../models/attendance_session.dart';
 import '../models/attendance_record.dart';
-import 'token_service.dart';
 
 /// Manages attendance sessions and records in Firestore.
 class SessionService {
@@ -12,7 +11,7 @@ class SessionService {
 
   // ─── Session management ───────────────────────────────────────────
 
-  /// Faculty creates a new attendance session (5-10 min window).
+  /// Faculty creates a new attendance session (5-10 min window) via server-side Cloud Function.
   Future<AttendanceSession> createSession({
     required String classId,
     required String subjectName,
@@ -21,36 +20,44 @@ class SessionService {
     final user = _auth.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
-    final now = DateTime.now();
-    final secret = TokenService.generateSessionSecret();
-
-    final docRef = _firestore.collection('sessions').doc();
-
-    final session = AttendanceSession(
-      sessionId: docRef.id,
-      classId: classId,
-      subjectName: subjectName,
-      facultyId: user.uid,
-      startTime: now,
-      endTime: now.add(Duration(minutes: durationMinutes)),
-      status: 'active',
-      hmacSecret: secret,
-    );
-
-    // Save metadata without hmacSecret in public doc to prevent student reading it
-    final sessionMap = session.toFirestore();
-    sessionMap.remove('hmacSecret');
-    await docRef.set(sessionMap);
-
-    // Save hmacSecret in private subcollection details document
-    await docRef.collection('private').doc('details').set({
-      'hmacSecret': secret,
-      'facultyId': user.uid,
+    final result =
+        await FirebaseFunctions.instance.httpsCallable('startSession').call({
+      'classId': classId,
+      'subjectName': subjectName,
+      'durationMinutes': durationMinutes,
     });
 
-    return session;
-  }
+    final sessionId = result.data['sessionId'] as String;
 
+    // Fetch the hmacSecret from the private details subcollection (faculty has read permission)
+    final secretDoc = await _firestore
+        .collection('sessions')
+        .doc(sessionId)
+        .collection('private')
+        .doc('details')
+        .get();
+    final hmacSecret = secretDoc.data()?['hmacSecret'] as String? ?? '';
+
+    // Fetch the public session details
+    final sessionDoc =
+        await _firestore.collection('sessions').doc(sessionId).get();
+    final data = sessionDoc.data() ?? {};
+
+    return AttendanceSession(
+      sessionId: sessionId,
+      classId: data['classId'] ?? classId,
+      subjectName: data['subjectName'] ?? subjectName,
+      facultyId: data['facultyId'] ?? user.uid,
+      startTime: data['startTime'] != null
+          ? (data['startTime'] as Timestamp).toDate()
+          : DateTime.now(),
+      endTime: data['endTime'] != null
+          ? (data['endTime'] as Timestamp).toDate()
+          : DateTime.now().add(Duration(minutes: durationMinutes)),
+      status: data['status'] ?? 'active',
+      hmacSecret: hmacSecret,
+    );
+  }
 
   /// Close a session manually (faculty stops early).
   Future<void> closeSession(String sessionId) async {
@@ -110,7 +117,6 @@ class SessionService {
     return session;
   }
 
-
   /// Get any active session (for students to find the current window).
   Future<AttendanceSession?> findActiveSession() async {
     final query = await _firestore
@@ -167,7 +173,6 @@ class SessionService {
     });
   }
 
-
   /// Edit an attendance record (faculty: present↔absent, mentor: can set OD).
   /// Edit an attendance record via Cloud Function (restricted by Faculty/Mentor roles).
   Future<void> editAttendance({
@@ -182,7 +187,6 @@ class SessionService {
       'newStatus': newStatus,
     });
   }
-
 
   /// Get attendance records for a session.
   Stream<List<AttendanceRecord>> sessionAttendance(String sessionId) {
@@ -213,11 +217,14 @@ class SessionService {
           .doc(studentUid)
           .get();
 
+      final docData = attendanceDoc.data();
+      final status = (docData != null)
+          ? (docData['status'] as String? ?? 'absent')
+          : 'absent';
+
       history.add({
         'session': session,
-        'status': attendanceDoc.exists
-            ? attendanceDoc.data()?['status'] ?? 'absent'
-            : 'absent',
+        'status': status,
         'record': attendanceDoc.exists
             ? AttendanceRecord.fromFirestore(attendanceDoc)
             : null,

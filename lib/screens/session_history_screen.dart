@@ -38,8 +38,8 @@ class SessionHistoryScreen extends StatelessWidget {
                 child: ListTile(
                   leading: CircleAvatar(
                     backgroundColor: isActive
-                        ? Colors.green.withOpacity(0.15)
-                        : Colors.grey.withOpacity(0.15),
+                        ? Colors.green.withValues(alpha: 0.15)
+                        : Colors.grey.withValues(alpha: 0.15),
                     child: Icon(
                       isActive ? Icons.play_circle : Icons.check_circle,
                       color: isActive ? Colors.green : Colors.grey,
@@ -56,8 +56,7 @@ class SessionHistoryScreen extends StatelessWidget {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          AttendanceListScreen(session: session),
+                      builder: (_) => AttendanceListScreen(session: session),
                     ),
                   ),
                 ),
@@ -141,7 +140,7 @@ class AttendanceListScreen extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: statusColor.withOpacity(0.15),
+                    backgroundColor: statusColor.withValues(alpha: 0.15),
                     child: Icon(statusIcon, color: statusColor),
                   ),
                   title: Text(
@@ -171,7 +170,7 @@ class AttendanceListScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.15),
+                        color: statusColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(

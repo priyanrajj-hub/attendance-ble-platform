@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
@@ -30,12 +29,12 @@ Future<void> main() async {
 
     await FirebaseAuth.instance.useAuthEmulator(host, 9099);
     FirebaseFunctions.instance.useFunctionsEmulator(host, 5001);
-    debugPrint('Local emulators initialized for Auth (9099) and Functions (5001) at $host. Firestore remains connected to the cloud.');
+    debugPrint(
+        'Local emulators initialized for Auth (9099) and Functions (5001) at $host. Firestore remains connected to the cloud.');
   }
 
   runApp(const AttendanceBleTestApp());
 }
-
 
 class AttendanceBleTestApp extends StatelessWidget {
   const AttendanceBleTestApp({super.key});
