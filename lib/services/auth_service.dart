@@ -146,6 +146,9 @@ class AuthService {
       // Automatically send the verification email immediately after signup
       await credential.user!.sendEmailVerification();
 
+      // 🔥 CRITICAL: Force refresh id token so Firestore SDK syncs before we call .set()!
+      await credential.user!.getIdToken(true);
+
       return credential.user!;
     } on FirebaseAuthException catch (e) {
       throw AuthException(_mapFirebaseError(e.code));
