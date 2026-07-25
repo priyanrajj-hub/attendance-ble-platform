@@ -131,11 +131,15 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
       final qSnap = await FirebaseFirestore.instance
           .collection('users')
           .where('uidPrefix', isEqualTo: uidPrefix)
-          .limit(1)
+          .limit(2)
           .get();
 
       if (qSnap.docs.isEmpty) {
-        throw Exception('Could not resolve full UID for prefix check.');
+        throw Exception('No student found for prefix $uidPrefix');
+      }
+      if (qSnap.docs.length > 1) {
+        throw Exception(
+            'Ambiguous prefix $uidPrefix matched ${qSnap.docs.length} students — cannot safely mark attendance');
       }
 
       final fullUid = qSnap.docs.first.id;
