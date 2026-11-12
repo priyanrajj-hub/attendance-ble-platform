@@ -45,6 +45,7 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       await user.sendEmailVerification();
+      if (!mounted) return;
       setState(() => _resent = true);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Verification email resent. Please check your inbox.')),
@@ -66,7 +67,10 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
             onPressed: () async {
               _timer?.cancel();
               await ref.read(authControllerProvider.notifier).signOut();
-              if (mounted) context.go('/login');
+              if (mounted) {
+                // ignore: use_build_context_synchronously
+                context.go('/login');
+              }
             },
           ),
         ],
