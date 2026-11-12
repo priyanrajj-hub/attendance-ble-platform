@@ -65,3 +65,7 @@ audit_*.json
 
 __pycache__/
 *.pyc
+.venv/
+backend/.venv/
+__pycache__/
+.pytest_cache/
