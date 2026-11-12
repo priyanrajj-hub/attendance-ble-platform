@@ -422,11 +422,16 @@ Official Google AI Studio terms state that unpaid API prompts and responses may 
 
 ### 9.1. Existing User Audit for Commit `135c35a` Bypass
 - **The Historical Vulnerability**: Commit `135c35a` temporarily hardcoded `status: 'verified'` during registration, and commit `73f8f97` only reversed it going forward.
-- **Audit Tooling**: Created [`scripts/audit_existing_users.py`](file:///C:/Users/PRIYANRAJ%20J/.gemini/antigravity/scratch/attendance-ble-platform/scripts/audit_existing_users.py) (read-only) to query Firestore `users/` and identify any accounts where:
+- **Rules Deployment vs. Commit Timestamps**: Git commit timestamps (10:43:00 UTC to 10:47:54 UTC on 2026-07-25) reflect only code authoring, **not** when rules were actually deployed to Firebase. The authoritative production exposure window must be determined from **Firebase Console → Firestore Database → Rules → Release history** tab.
+- **Approval Contract & Authoritative Indicator**: Verified against `lib/screens/admin_approval_screen.dart` (lines 64–68) and `firestore.rules`. Legitimate approvals write `verifiedBy: adminUid` and `verifiedAt: serverTimestamp()`. Clients cannot write `verifiedBy` on create. Therefore, the authoritative anomaly indicator is:
   ```python
-  status == 'verified' and (verifiedBy is None or approvedBy is None) and role != 'admin'
+  status == 'verified' and not verified_by and role != 'admin'
   ```
-- **Operational Rule**: The script is strictly **read-only**. It outputs a proposed reset list (`RESET_TO_PENDING_VERIFICATION`). **No production data will be modified without explicit user authorization.**
+- **Signal Weighting & Failure Handling**:
+  - `createdAt` is client-supplied and considered a **weak secondary signal**, not a hard filter.
+  - Missing or failing Firebase Auth account lookups (orphaned Firestore documents) are explicitly flagged as anomalies (`auth_lookup_error`), preventing silent bypass.
+- **Audit Tooling**: [`scripts/audit_existing_users.py`](file:///C:/Users/PRIYANRAJ%20J/.gemini/antigravity/scratch/attendance-ble-platform/scripts/audit_existing_users.py) (read-only, offline unit-tested in `scripts/test_audit_existing_users.py`) connects to Firestore and Auth only when passed `--live` and a temporary external service account JSON.
+- **Operational Rule**: The script is strictly **read-only** (zero `.update()`, `.set()`, or `.delete()` calls). It outputs a proposed reset list to a gitignored file (`audit_report.json`). **No production data will be modified without explicit user authorization.**
 
 ### 9.2. Remote Branch Archival
 - Remote branches (`phase-1-auth`, `phase-2-onwards`, `phase-7-security-fixes`) are fully merged ancestors of `main`.
