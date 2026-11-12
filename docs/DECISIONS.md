@@ -24,23 +24,52 @@ Accepted
 Attendance systems require relational integrity, append-only auditing, institutional roster management, and complex SQL reporting. Concurrently, mobile BLE proximity sessions require low-latency live state synchronization and roster streaming to faculty screens.
 
 ### Decision
-1. **System of Record**: PostgreSQL (hosted on AWS RDS `ap-south-1`) is the authoritative source of truth for user accounts, courses, enrollments, devices, and finalized attendance records.
-2. **Ephemeral Live State**: Cloud Firestore is retained exclusively as an ephemeral realtime synchronization layer for active sessions.
+1. **System of Record**: PostgreSQL (hosted on free-tier serverless PostgreSQL via Neon or Supabase) is the authoritative source of truth for user accounts, courses, enrollments, devices, and finalized attendance records.
+2. **Ephemeral Live State**: Cloud Firestore (Firebase Spark free plan) is retained exclusively as an ephemeral realtime synchronization layer for active sessions.
 3. **Server Authority**: The mobile client is untrusted. Final attendance verification, device signature validation, and recording are executed server-side via a typed FastAPI backend.
 4. **Reconciliation**: A background task periodically reconciles active Firestore session records with PostgreSQL.
 
 ### Status
-Proposed (Phase 3 Target)
+Accepted (Amended for $0 Budget)
 
 ---
 
-## ADR-0003: Claude Model Configuration
+## ADR-0003: AI Model Configuration
 
 ### Context
-Anthropic model identifiers update periodically. Hardcoding model snapshot strings in application code leads to deprecation issues and lack of environment flexibility.
+AI model identifiers update periodically. Hardcoding model snapshot strings in application code leads to deprecation issues and lack of environment flexibility.
 
 ### Decision
-Model identifiers for the AI policy and query assistant are made configurable via the environment variable `ANTHROPIC_MODEL`, defaulting to a configurable production snapshot (e.g. `claude-3-5-sonnet-20241022` or `claude-3-5-haiku-20241022`). Applications query models dynamically or accept administrator configuration from environment variables.
+Model identifiers for the AI policy and query assistant are made configurable via environment variables (`AI_MODEL` / `ANTHROPIC_MODEL` / `GEMINI_MODEL`), defaulting to configurable production snapshots. Applications query models dynamically or accept administrator configuration from environment variables.
+
+### Status
+Accepted
+
+---
+
+## ADR-0004: $0 Zero-Dollar Cloud & Free-Tier Infrastructure Architecture
+
+### Context
+Per confirmed requirement Q9, the monthly cloud budget is strictly **$0.00 / month**. Standard cloud architectures employing AWS RDS, ECS Fargate, EKS, or paid LLM APIs incur monthly recurring charges. The infrastructure must operate entirely within perpetual free tiers while avoiding common cost traps (e.g., Firebase Blaze plan overdrafts, expiring AWS free tiers).
+
+### Options Evaluated
+
+| Layer | Free-Tier Options Evaluated | Selected Architecture | Reason & Trade-offs |
+| :--- | :--- | :--- | :--- |
+| **Auth & Live Session** | **Firebase Spark** vs. Supabase Realtime | **Firebase Spark Plan** | Codebase already has working Flutter Firebase Auth + Firestore SDK and security rules tests. Free quota (50k reads, 20k writes/day) easily covers a 300-student pilot. |
+| **API Compute** | **Google Cloud Run** vs. Render vs. Fly.io | **Google Cloud Run (Free Tier)** | 2M requests/month, 360k GB-sec, 180k vCPU-sec free. Scales to zero (0 cost when idle). Trade-off: ~2-3s cold start latency on first request after idle. |
+| **Database** | **Neon Postgres** vs. **Supabase Postgres** | **Neon / Supabase Free Tier** | 0.5 GB free storage, standard PostgreSQL wire protocol compatible with SQLAlchemy/Alembic. Trade-off: auto-suspend on inactivity; backend must use pooled connections with reconnect retry. |
+| **Object Storage** | **Cloudflare R2** vs. Local S3 (MinIO) | **Cloudflare R2 (Free Tier)** | 10 GB storage free/month, $0 egress fees. |
+| **Edge / Proxy** | Cloudflare Free vs. Raw IP | **Cloudflare Free Tier** | Free DDoS protection, automatic TLS certificates, rate limiting at edge. |
+| **Error Tracing** | Sentry Developer vs. CloudWatch | **Sentry Free Tier** | 5,000 events/month, zero cost. |
+| **CI/CD** | GitHub Actions | **GitHub Actions** | Unlimited build minutes for public GitHub repositories. |
+| **AI / LLM** | Anthropic Claude vs. **Google Gemini API Free Tier** vs. Local Ollama | **Gemini API Free Tier / Delayed** | Delay paid Claude API. In Phase 5, evaluate Google Gemini 1.5/2.0 Flash via Google AI Studio free tier (generous free requests/min with no credit card required) or local quantized LLMs. |
+
+### Cost Trap Mitigations
+1. **Firebase Blaze Trap**: Never upgrade the Firebase project to the pay-as-you-go Blaze plan without an enforced hard billing cap. Stay strictly within the Spark plan. (This validates why Cloud Functions were removed earlier).
+2. **AWS Free Tier Expiry Trap**: Avoid AWS services that convert to automatic recurring charges after the initial 12-month promotional period.
+3. **Database Inactivity Pausing**: Implement connection retries in the FastAPI database engine (`pool_pre_ping=True`) to gracefully handle serverless Postgres cold-wakeups.
+4. **Terraform & Kubernetes**: Retain Terraform scripts and Kubernetes manifests strictly as local showcase artifacts (`deploy/k8s/` and local k3s/kind), ensuring zero cloud spend.
 
 ### Status
 Accepted
