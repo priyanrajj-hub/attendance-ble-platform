@@ -24,7 +24,7 @@ class SessionStartRequest(BaseModel):
     rssi_threshold: int = -75
 
 
-class SessionResponse(BaseModel):
+class SessionPublicResponse(BaseModel):
     id: str
     course_id: str
     room_label: str
@@ -32,10 +32,14 @@ class SessionResponse(BaseModel):
     opens_at: datetime
     closes_at: datetime
     status: str
-    ephemeral_token: Optional[str] = None
+    # Note: secret_hash and ephemeral_token are STRICTLY EXCLUDED to prevent SEC-03 token leakage
 
 
-@router.post("/start", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
+class SessionStartResponse(SessionPublicResponse):
+    ephemeral_token: str  # Disclosed ONLY to the broadcasting faculty upon session creation
+
+
+@router.post("/start", response_model=SessionStartResponse, status_code=status.HTTP_201_CREATED)
 async def start_session(
     payload: SessionStartRequest,
     current_user: AuthenticatedUser = Depends(require_role(["faculty", "admin"])),
@@ -92,7 +96,7 @@ async def start_session(
     await db.commit()
     await db.refresh(new_session)
 
-    return SessionResponse(
+    return SessionStartResponse(
         id=str(new_session.id),
         course_id=str(new_session.course_id),
         room_label=new_session.room_label,
@@ -100,11 +104,11 @@ async def start_session(
         opens_at=new_session.opens_at,
         closes_at=new_session.closes_at,
         status=new_session.status,
-        ephemeral_token=ephemeral_token,  # Returned only to starting faculty
+        ephemeral_token=ephemeral_token,  # Disclosed ONLY to starting faculty
     )
 
 
-@router.post("/{session_id}/stop", response_model=SessionResponse)
+@router.post("/{session_id}/stop", response_model=SessionPublicResponse)
 async def stop_session(
     session_id: str,
     current_user: AuthenticatedUser = Depends(require_role(["faculty", "admin"])),
@@ -129,7 +133,7 @@ async def stop_session(
     await db.commit()
     await db.refresh(sess)
 
-    return SessionResponse(
+    return SessionPublicResponse(
         id=str(sess.id),
         course_id=str(sess.course_id),
         room_label=sess.room_label,
@@ -140,13 +144,14 @@ async def stop_session(
     )
 
 
-@router.get("/active", response_model=List[SessionResponse])
+@router.get("/active", response_model=List[SessionPublicResponse])
 async def list_active_sessions(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Lists active sessions for the authenticated student or faculty member.
+    Never returns session secrets or nonces to students.
     """
     now = datetime.now(timezone.utc)
     u_stmt = select(User).where(User.firebase_uid == current_user.uid)
@@ -186,7 +191,7 @@ async def list_active_sessions(
     sessions = res.scalars().all()
 
     return [
-        SessionResponse(
+        SessionPublicResponse(
             id=str(s.id),
             course_id=str(s.course_id),
             room_label=s.room_label,

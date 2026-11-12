@@ -89,58 +89,24 @@ class AttendancePolicyEngine:
 
 class AIAgentClient:
     """
-    Client connecting to Hugging Face Inference API for `priyanrajj/attendanceagent`.
-    Falls back to deterministic institutional policy engine when offline or unconfigured.
+    Institutional Attendance Policy Client.
+    EXTERNAL AI INFERENCE DISABLED: In accordance with student privacy rules,
+    all external HTTP requests to external models/buckets are disabled by default.
+    All evaluations are strictly performed locally using the deterministic policy engine.
     """
 
     def __init__(self):
         self.model_id = settings.HUGGINGFACE_MODEL_ID
         self.bucket_id = settings.HUGGINGFACE_BUCKET_ID
-        self.api_token = settings.HUGGINGFACE_API_TOKEN
+        self.api_token = None  # Strictly disarmed to prevent external data transmission
         self.api_url = settings.HUGGINGFACE_API_URL
 
     async def query(self, prompt: str, user_role: str = "student", context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Executes a policy or grievance query.
+        Executes a policy or grievance calculation locally.
+        Zero student data is transmitted externally.
         """
-        # If API token is provided, attempt Hugging Face Inference API call
-        if self.api_token and self.api_token.strip():
-            headers = {"Authorization": f"Bearer {self.api_token}"}
-            payload = {
-                "inputs": prompt,
-                "parameters": {
-                    "max_new_tokens": 256,
-                    "temperature": 0.2,
-                    "return_full_text": False,
-                },
-            }
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.post(self.api_url, headers=headers, json=payload)
-                    if response.status_code == 200:
-                        data = response.json()
-                        text_output = (
-                            data[0].get("generated_text", "")
-                            if isinstance(data, list) and len(data) > 0
-                            else str(data)
-                        )
-                        return {
-                            "query": prompt,
-                            "response": text_output,
-                            "source": "huggingface_inference_api",
-                            "model": self.model_id,
-                            "bucket": self.bucket_id,
-                        }
-                    else:
-                        logger.warning(
-                            "HF Inference API returned status %s: %s",
-                            response.status_code,
-                            response.text,
-                        )
-            except Exception as e:
-                logger.warning("HF Inference API request failed: %s", e)
-
-        # Authoritative deterministic institutional fallback
+        # Authoritative deterministic institutional policy evaluation (Local only)
         faq_answer = AttendancePolicyEngine.answer_faq(prompt)
         if faq_answer:
             response_text = faq_answer
@@ -160,7 +126,7 @@ class AIAgentClient:
         return {
             "query": prompt,
             "response": response_text,
-            "source": "amrita_policy_engine_v1",
+            "source": "amrita_policy_engine_v1_local",
             "model": self.model_id,
             "bucket": self.bucket_id,
             "calculation": calc_result,
