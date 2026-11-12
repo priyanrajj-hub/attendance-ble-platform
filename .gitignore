@@ -54,9 +54,14 @@ yarn-error.log*
 .env.*
 !.env.example
 
-# === Test & Misc ===
+# === Test & Audit Misc ===
 coverage/
 users.json
 firebase-test.json
+audit_report.*
+audit_*.json
 *.patch
 *.diff
+
+__pycache__/
+*.pyc
