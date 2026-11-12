@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/user_role.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/proximity_provider.dart';
+import '../../services/biometric_service.dart';
 
 class StudentHomeScreen extends ConsumerStatefulWidget {
   const StudentHomeScreen({super.key});
@@ -14,14 +15,32 @@ class StudentHomeScreen extends ConsumerStatefulWidget {
 
 class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
   bool _isCheckingIn = false;
+  bool _fingerprintVerified = false;
   CheckInPayload? _lastProof;
   String? _proximityError;
 
   Future<void> _startProximityFlow() async {
     setState(() {
       _isCheckingIn = true;
+      _fingerprintVerified = false;
       _lastProof = null;
       _proximityError = null;
+    });
+
+    // 1. Mandatory Biometric / Fingerprint Check (Anti-Proxy Defense)
+    final bioService = ref.read(biometricServiceProvider);
+    final bioResult = await bioService.verifyAttendanceFingerprint();
+    if (!bioResult.isSuccess) {
+      setState(() {
+        _isCheckingIn = false;
+        _proximityError = bioResult.errorMessage ??
+            'Biometric fingerprint verification required. Proxy attendance is strictly prohibited.';
+      });
+      return;
+    }
+
+    setState(() {
+      _fingerprintVerified = true;
     });
 
     try {
@@ -208,6 +227,33 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                       Text(
                         _proximityError!,
                         style: const TextStyle(color: Colors.orange, fontSize: 13),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    if (_fingerprintVerified) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.fingerprint, color: Colors.green, size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'Fingerprint Verified (Anti-Proxy Confirmed)',
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 12),
                     ],
