@@ -1,679 +1,1303 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BLE Attendance App Mock Preview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Amrita BLE Attendance • Next-Gen Anime UI Simulator</title>
   <style>
     :root {
-      --bg: #0b0b14;
-      --card-bg: rgba(25, 25, 42, 0.6);
-      --border: rgba(99, 102, 241, 0.2);
-      --accent: #6366f1;
-      --accent-glow: rgba(99, 102, 241, 0.4);
-      --green: #10b981;
-      --green-glow: rgba(16, 185, 129, 0.4);
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
-      --red: #ef4444;
+      --bg: #090a16;
+      --surface: #121429;
+      --card-bg: rgba(23, 26, 52, 0.7);
+      --card-border: rgba(129, 140, 248, 0.2);
+      --primary: #6366f1;
+      --primary-light: #818cf8;
+      --primary-glow: rgba(99, 102, 241, 0.45);
+      --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.45);
+      --amber: #f59e0b;
+      --rose: #f43f5e;
+      --cyan: #06b6d4;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
     }
 
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: var(--font);
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
       background-color: var(--bg);
-      background-image: radial-gradient(circle at 50% 10%, #1e1b4b 0%, var(--bg) 70%);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, #0d1029 0%, var(--bg) 80%);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 20px;
+      padding: 16px;
       overflow-x: hidden;
     }
 
-    header {
+    /* TOP GLOBAL CONTROLS & DOWNLOAD BAR */
+    .top-banner {
+      width: 100%;
+      max-width: 900px;
+      background: linear-gradient(135deg, rgba(30, 27, 75, 0.8), rgba(15, 23, 42, 0.8));
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 14px 20px;
       margin-bottom: 20px;
-      text-align: center;
+      backdrop-filter: blur(14px);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
     }
 
-    header h1 {
-      font-size: 24px;
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #4f46e5, #06b6d4);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+    }
+
+    .brand-title h1 {
+      font-size: 17px;
       font-weight: 700;
-      letter-spacing: 0.5px;
-      background: linear-gradient(135deg, #a5b4fc, #6366f1);
+      letter-spacing: 0.3px;
+      background: linear-gradient(135deg, #c7d2fe, #a5b4fc, #38bdf8);
       -webkit-background-clip: text;
       background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
-    header p {
-      font-size: 13px;
+    .brand-title p {
+      font-size: 11px;
       color: var(--text-muted);
-      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    .container {
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--emerald);
+      animation: pulse-dot 1.8s infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    .apk-cta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      text-decoration: none;
+      padding: 9px 18px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 4px 18px rgba(16, 185, 129, 0.4);
+      transition: all 0.2s ease;
+    }
+
+    .apk-cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(16, 185, 129, 0.6);
+    }
+
+    /* DEVICE WRAPPER & CHASSIS */
+    .viewport-modes {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .mode-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mode-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary-light);
+      box-shadow: 0 0 14px var(--primary-glow);
+    }
+
+    .phone-chassis {
       width: 100%;
-      max-width: 400px;
-      /* Mobile frame simulation */
-      height: 750px;
-      background: #11111f;
-      border: 6px solid #2e303f;
-      border-radius: 40px;
+      max-width: 412px;
+      height: 840px;
+      background: #0d0f1f;
+      border: 8px solid #232742;
+      border-radius: 46px;
+      box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.8), 0 0 50px rgba(99, 102, 241, 0.25);
       position: relative;
-      overflow: hidden;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px var(--accent-glow);
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      transition: max-width 0.3s ease, border-radius 0.3s ease;
     }
 
-    .status-bar {
-      height: 30px;
+    .phone-chassis.tablet-mode {
+      max-width: 820px;
+      height: 860px;
+      border-radius: 28px;
+    }
+
+    /* PHONE TOP BAR & ISLAND */
+    .dynamic-island-bar {
+      height: 38px;
+      background: #090a16;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 0 24px;
+      justify-content: space-between;
+      padding: 0 22px;
       font-size: 12px;
       color: var(--text-muted);
-      background: #111124;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      z-index: 5;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      z-index: 50;
     }
 
-    .screen {
+    .pill-island {
+      width: 90px;
+      height: 18px;
+      background: #000;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .camera-lens {
+      width: 8px;
+      height: 8px;
+      background: #14172e;
+      border: 1px solid #262c54;
+      border-radius: 50%;
+    }
+
+    /* APP CONTAINER SCROLL */
+    .app-screen-body {
       flex: 1;
-      display: none;
-      flex-direction: column;
-      padding: 24px;
       overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      padding: 18px;
+      position: relative;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
     }
 
-    .screen.active {
-      display: flex !important;
+    .app-screen-body::-webkit-scrollbar {
+      width: 4px;
+    }
+    .app-screen-body::-webkit-scrollbar-thumb {
+      background: rgba(99, 102, 241, 0.3);
+      border-radius: 4px;
     }
 
-    /* DIAGNOSTICS CONSOLE */
-    #error-console {
-      display: none;
-      background: var(--red);
-      color: white;
-      padding: 12px;
-      font-size: 11px;
-      font-family: monospace;
-      z-index: 100;
+    /* ANIME CLASSROOM HERO CARD */
+    .anime-hero-card {
+      position: relative;
+      height: 175px;
+      border-radius: 24px;
+      overflow: hidden;
+      margin-bottom: 18px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .anime-hero-bg {
       position: absolute;
-      top: 30px;
+      top: 0;
       left: 0;
       width: 100%;
-      word-break: break-all;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+      height: 100%;
+      object-fit: cover;
+      filter: saturate(1.2) brightness(0.9);
+      transition: transform 0.5s ease;
     }
 
-    /* TYPOGRAPHY & ELEMENTS */
-    h2 {
-      font-size: 20px;
-      margin-bottom: 16px;
-      font-weight: 600;
+    .anime-hero-card:hover .anime-hero-bg {
+      transform: scale(1.04);
     }
 
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
+    .anime-hero-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.2) 0%, rgba(9, 10, 22, 0.92) 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 16px;
+    }
+
+    .hero-badge-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .hero-pill {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      backdrop-filter: blur(8px);
+    }
+
+    .hero-pill.ble {
+      background: rgba(99, 102, 241, 0.35);
+      color: #c7d2fe;
+      border: 1px solid rgba(129, 140, 248, 0.4);
+    }
+
+    .hero-pill.room {
+      background: rgba(16, 185, 129, 0.35);
+      color: #a7f3d0;
+      border: 1px solid rgba(52, 211, 153, 0.4);
+    }
+
+    .hero-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: white;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+    }
+
+    .hero-subtitle {
+      font-size: 12px;
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    /* ROLE SELECTOR CHIPS */
+    .role-pills-bar {
+      display: flex;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px;
       border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: 18px;
+      gap: 4px;
+    }
+
+    .role-tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .role-tab.active {
+      background: linear-gradient(135deg, var(--primary), #4338ca);
+      color: white;
+      box-shadow: 0 4px 14px var(--primary-glow);
+    }
+
+    /* CARD STYLING */
+    .glass-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
       padding: 16px;
       margin-bottom: 16px;
-      backdrop-filter: blur(10px);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
     }
 
-    .input-group {
-      margin-bottom: 16px;
+    /* AVATAR + PROFILE HEADER */
+    .profile-banner {
+      display: flex;
+      align-items: center;
+      gap: 14px;
     }
 
-    .input-group label {
-      display: block;
+    .anime-avatar {
+      width: 58px;
+      height: 58px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #4f46e5, #ec4899);
+      padding: 2px;
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .anime-avatar svg {
+      width: 100%;
+      height: 100%;
+      border-radius: 16px;
+      background: #181935;
+    }
+
+    .avatar-status-badge {
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      width: 16px;
+      height: 16px;
+      background: var(--emerald);
+      border: 2px solid #0d0f1f;
+      border-radius: 50%;
+    }
+
+    .profile-info h3 {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .profile-info p {
       font-size: 12px;
       color: var(--text-muted);
-      margin-bottom: 6px;
+      margin-top: 1px;
+    }
+
+    .profile-tags {
+      display: flex;
+      gap: 6px;
+      margin-top: 5px;
+    }
+
+    .micro-tag {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 8px;
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    /* FINGERPRINT ANTI-PROXY SCANNER MODULE */
+    .fingerprint-card {
+      text-align: center;
+      padding: 22px 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .scanner-pad {
+      width: 110px;
+      height: 110px;
+      margin: 14px auto;
+      border-radius: 28px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 2px solid var(--primary-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+      box-shadow: 0 0 30px var(--primary-glow);
+      transition: all 0.3s;
+    }
+
+    .scanner-pad:hover {
+      transform: scale(1.03);
+      border-color: var(--cyan);
+      box-shadow: 0 0 35px rgba(6, 182, 212, 0.5);
+    }
+
+    .scanner-pad.scanning {
+      border-color: var(--cyan);
+      box-shadow: 0 0 40px rgba(6, 182, 212, 0.7);
+    }
+
+    .scanner-pad.verified {
+      border-color: var(--emerald);
+      box-shadow: 0 0 45px var(--emerald-glow);
+    }
+
+    .laser-scan-line {
+      position: absolute;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #38bdf8, #06b6d4, transparent);
+      box-shadow: 0 0 12px #38bdf8;
+      top: 0;
+      display: none;
+    }
+
+    .scanner-pad.scanning .laser-scan-line {
+      display: block;
+      animation: laser-sweep 1.2s infinite ease-in-out alternate;
+    }
+
+    @keyframes laser-sweep {
+      0% { top: 6px; }
+      100% { top: 98px; }
+    }
+
+    .fingerprint-svg {
+      width: 62px;
+      height: 62px;
+      stroke: var(--primary-light);
+      transition: stroke 0.3s;
+    }
+
+    .scanner-pad.verified .fingerprint-svg {
+      stroke: var(--emerald);
+    }
+
+    .scanner-status-text {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary-light);
+      margin-top: 8px;
+    }
+
+    .scanner-status-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* ATTENDANCE POLICY RING */
+    .attendance-stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.3fr;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .circular-progress-wrap {
+      position: relative;
+      width: 100px;
+      height: 100px;
+      margin: 0 auto;
+    }
+
+    .circular-progress-wrap svg {
+      width: 100px;
+      height: 100px;
+      transform: rotate(-90deg);
+    }
+
+    .circle-bg {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.08);
+      stroke-width: 9;
+    }
+
+    .circle-fill {
+      fill: none;
+      stroke: url(#emerald-grad);
+      stroke-width: 9;
+      stroke-linecap: round;
+      stroke-dasharray: 264;
+      stroke-dashoffset: 40; /* 85% */
+      transition: stroke-dashoffset 1s ease;
+    }
+
+    .circle-center-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .circle-center-text .pct {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--emerald);
+    }
+
+    .circle-center-text .lbl {
+      font-size: 9px;
+      color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
-    .input-group input,
-    .input-group select {
-      width: 100%;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      padding: 12px;
-      color: white;
+    .stats-details h4 {
       font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s;
+      font-weight: 700;
+      margin-bottom: 4px;
     }
 
-    .input-group input:focus {
-      border-color: var(--accent);
+    .stats-details p {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
     }
 
-    button {
-      background: linear-gradient(135deg, #6366f1, #4f46e5);
+    .condonation-pill {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    /* FACULTY RADAR SCANNER */
+    .radar-canvas-wrap {
+      width: 100%;
+      height: 180px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+
+    .radar-sweep-disc {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: 1px dashed rgba(99, 102, 241, 0.35);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .radar-sweep-disc::before {
+      content: "";
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 1px solid rgba(6, 182, 212, 0.3);
+    }
+
+    .radar-blip {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+      animation: blip-pulse 1.4s infinite;
+    }
+
+    @keyframes blip-pulse {
+      0% { transform: scale(0.8); opacity: 1; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    .radar-arm {
+      position: absolute;
+      width: 50%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--cyan));
+      top: 50%;
+      left: 50%;
+      transform-origin: 0% 0%;
+      animation: rotate-radar 3s linear infinite;
+    }
+
+    @keyframes rotate-radar {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* RSSI SLIDER CONTROL */
+    .slider-box {
+      margin-top: 10px;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    input[type=range] {
+      width: 100%;
+      accent-color: var(--cyan);
+    }
+
+    /* ROSTER LIST */
+    .student-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      margin-bottom: 8px;
+      border-left: 3px solid var(--primary);
+      transition: all 0.2s;
+    }
+
+    .student-item.verified {
+      border-left-color: var(--emerald);
+      background: rgba(16, 185, 129, 0.05);
+    }
+
+    .stu-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .stu-mini-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: #1e1b4b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stu-name {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .stu-roll {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .badge-check {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--emerald);
+      background: rgba(16, 185, 129, 0.12);
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+
+    /* ACTION BUTTONS */
+    .btn-gradient {
+      background: linear-gradient(135deg, var(--primary), #4338ca);
       color: white;
       border: none;
-      border-radius: 12px;
-      padding: 14px;
+      padding: 12px 18px;
+      border-radius: 14px;
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
-      transition: transform 0.1s, opacity 0.2s;
-      width: 100%;
-    }
-
-    button:active {
-      transform: scale(0.98);
-    }
-
-    button.secondary {
-      background: transparent;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
-    /* SCREEN 1: LOGIN */
-    #login-screen {
-      justify-content: center;
-    }
-
-    #biometric-modal {
-      display: none;
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      background: #16162a;
-      border-top: 1px solid var(--border);
-      border-radius: 24px 24px 0 0;
-      padding: 24px;
-      box-shadow: 0 -10px 25px rgba(0, 0, 0, 0.5);
-      text-align: center;
-      z-index: 10;
-    }
-
-    .fingerprint-icon {
-      width: 64px;
-      height: 64px;
-      margin: 20px auto;
-      border: 2px solid var(--accent);
-      border-radius: 50px;
       display: flex;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
-      position: relative;
-    }
-
-    .fingerprint-icon::before {
-      content: "";
-      position: absolute;
-      width: inherit;
-      height: inherit;
-      border-radius: 50%;
-      border: 2px solid var(--accent);
-      animation: pulse 1.5s infinite;
-      opacity: 0;
-    }
-
-    @keyframes pulse {
-      0% {
-        transform: scale(1);
-        opacity: 0.8;
-      }
-
-      100% {
-        transform: scale(1.4);
-        opacity: 0;
-      }
-    }
-
-    /* SCREEN 2: ROLE SELECT */
-    .role-card {
-      display: flex;
-      flex-direction: column;
       gap: 8px;
-      cursor: pointer;
-      transition: border-color 0.2s, background-color 0.2s;
+      box-shadow: 0 4px 18px var(--primary-glow);
+      transition: all 0.2s ease;
+      width: 100%;
     }
 
-    .role-card:hover {
-      border-color: var(--accent);
-      background: rgba(99, 102, 241, 0.1);
+    .btn-gradient:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px var(--primary-glow);
     }
 
-    /* SCREEN 3: STUDENT BROADCAST */
-    .beacon-container {
+    .btn-gradient.emerald {
+      background: linear-gradient(135deg, #10b981, #047857);
+      box-shadow: 0 4px 18px var(--emerald-glow);
+    }
+
+    /* BOTTOM DOCK NAVIGATION */
+    .phone-dock {
+      height: 64px;
+      background: rgba(13, 15, 31, 0.95);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 12px;
+      backdrop-filter: blur(16px);
+      z-index: 40;
+    }
+
+    .dock-tab {
       display: flex;
       flex-direction: column;
       align-items: center;
-      margin: 20px 0;
-    }
-
-    .beacon {
-      width: 110px;
-      height: 110px;
-      border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 35px var(--green-glow);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-    }
-
-    .beacon::after {
-      content: "";
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      border: 2px solid var(--green);
-      animation: pulse-green 2s infinite;
-    }
-
-    @keyframes pulse-green {
-      0% {
-        transform: scale(1);
-        opacity: 1;
-      }
-
-      100% {
-        transform: scale(2.2);
-        opacity: 0;
-      }
-    }
-
-    .timer-ring {
-      font-size: 26px;
-      font-weight: bold;
-      color: white;
-      z-index: 2;
-    }
-
-    .token-text {
-      font-family: monospace;
-      background: rgba(0, 0, 0, 0.3);
-      padding: 8px 16px;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      margin-top: 12px;
-      font-size: 14px;
-      letter-spacing: 1px;
-      color: #38bdf8;
-      text-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
-    }
-
-    /* SCREEN 4: FACULTY SCANNER */
-    .radar-circle {
-      width: 48px;
-      height: 48px;
-      border: 2px solid var(--accent);
-      border-radius: 50%;
-      border-top-color: transparent;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      100% {
-        transform: rotate(360deg);
-      }
-    }
-
-    .scan-list {
-      margin-top: 12px;
-      max-height: 280px;
-      overflow-y: auto;
-    }
-
-    .scan-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 14px;
-      background: rgba(255, 255, 255, 0.03);
-      border-radius: 12px;
-      border-left: 4px solid var(--accent);
-      margin-bottom: 10px;
-      transition: all 0.3s ease;
-    }
-
-    .scan-item.verified {
-      border-left-color: var(--green);
-      box-shadow: 0 0 10px rgba(16, 185, 129, 0.05);
-    }
-
-    .scan-item.packet-pulse {
-      background: rgba(99, 102, 241, 0.1);
-      transform: scale(1.02);
-    }
-
-    .device-info h4 {
-      font-size: 14px;
+      gap: 4px;
+      color: var(--text-dim);
+      font-size: 10px;
       font-weight: 600;
+      cursor: pointer;
+      transition: color 0.2s;
     }
 
-    .device-info p {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 2px;
+    .dock-tab.active {
+      color: var(--primary-light);
     }
 
-    .back-btn {
-      margin-top: auto;
+    .dock-tab svg {
+      width: 22px;
+      height: 22px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
     }
 
-    /* UTILS */
-    .flex-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    /* VIEW PANELS */
+    .panel {
+      display: none;
+      animation: fadeIn 0.25s ease-in-out;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
     }
   </style>
 </head>
-
 <body>
 
-  <header>
-    <h1>BLE Attendance System</h1>
-    <p>Security Hardened Concept Design Preview</p>
-  </header>
-
-  <div class="container">
-    <!-- MOCK SYSTEM STATUS BAR -->
-    <div class="status-bar">
-      <span>11:22 AM</span>
-      <span>🔋 99% | BLE ON</span>
-    </div>
-
-    <!-- MOCK ERROR DIAGNOSTICS CONSOLE -->
-    <div id="error-console">
-      <strong>Script Error Output:</strong> <span id="error-message"></span>
-    </div>
-
-    <!-- SCREEN 1: LOGIN -->
-    <div id="login-screen" class="screen active">
-      <h2>Welcome Back</h2>
-      <div class="input-group">
-        <label for="email">College Email (@college.edu.in)</label>
-        <input type="email" id="email" value="student@college.edu.in" placeholder="name@college.edu.in">
-      </div>
-      <div class="input-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" value="••••••••••">
-      </div>
-
-      <button onclick="requestBiometrics()" style="margin-top: 10px;">Sign In</button>
-      <button class="secondary" style="margin-top: 10px;">Register Account</button>
-    </div>
-
-    <!-- MOCK BIOMETRIC POPUP (RULE HARDENING DEMO) -->
-    <div id="biometric-modal">
-      <h3>Fingerprint Required</h3>
-      <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Confirm your identity to decrypt localized
-        BLE keys</p>
-
-      <div class="fingerprint-icon" onclick="grantBiometrics()">
-        <!-- Fingerprint icon -->
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
-          <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"></path>
-          <path d="M12 6a6 6 0 0 1 6 6c0 2.2-1.8 4-4 4"></path>
-          <path d="M8 12a4 4 0 0 1 8 0c0 1.1-.9 2-2 2"></path>
+  <!-- TOP HEADER & APK DOWNLOAD BAR -->
+  <div class="top-banner">
+    <div class="brand-group">
+      <div class="brand-logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/>
+          <path d="M17 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/>
+          <path d="M5 17h-2v-4m-1 -8h11v12m-4 0h6m4 0h2v-6h-8m0 -5h5l3 5"/>
+          <line x1="12" y1="3" x2="12" y2="7"/>
+          <path d="M9 5l3 -2l3 2"/>
         </svg>
       </div>
-
-      <span style="font-size: 11px; color: var(--text-muted);">Tap fingerprint to verify login second-factor</span>
+      <div class="brand-title">
+        <h1>Amrita BLE Attendance • Phase 2a Simulator</h1>
+        <p><span class="live-dot"></span> Live PostgreSQL Engine • Biometric Anti-Proxy Lock Active</p>
+      </div>
     </div>
 
-    <!-- SCREEN 2: ROLE SELECT -->
-    <div id="role-screen" class="screen">
-      <div class="flex-row" style="margin-bottom: 20px;">
-        <h2>Portal Home</h2>
-        <span
-          style="font-size: 11px; background: rgba(99,102,241,0.2); padding: 4px 8px; border-radius: 20px; color: var(--accent);">Verified</span>
-      </div>
+    <!-- DIRECT APK DOWNLOAD -->
+    <a href="/download/app.apk" class="apk-cta" title="Download compiled Android APK">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      <span>Download Android App (.apk)</span>
+      <span style="font-size: 10px; opacity: 0.85; padding-left: 4px;">188 MB</span>
+    </a>
+  </div>
 
-      <div class="card role-card" onclick="openStudentPortal()">
-        <h4 style="color: var(--accent);">Student Portal</h4>
-        <p style="font-size: 13px; color: var(--text-muted);">Broadcast rotating cryptographically signed BLE tokens to
-          mark attendance.</p>
-      </div>
+  <!-- VIEWPORT SWITCHER -->
+  <div class="viewport-modes">
+    <button class="mode-btn active" onclick="setMode('phone')">📱 Mobile View</button>
+    <button class="mode-btn" onclick="setMode('tablet')">🖥️ Expanded View</button>
+  </div>
 
-      <div class="card role-card" onclick="openFacultyPortal()">
-        <h4 style="color: var(--accent);">Faculty Portal</h4>
-        <p style="font-size: 13px; color: var(--text-muted);">Configure attendance sessions, scan nearby broadcasters,
-          and trigger notifications.</p>
-      </div>
+  <!-- PHONE CONTAINER -->
+  <div class="phone-chassis" id="phoneContainer">
 
-      <button class="secondary back-btn" onclick="goToScreen('login-screen')">Log Out</button>
+    <!-- STATUS BAR & DYNAMIC ISLAND -->
+    <div class="dynamic-island-bar">
+      <span>09:41</span>
+      <div class="pill-island">
+        <div class="camera-lens"></div>
+      </div>
+      <span>5G • 100%</span>
     </div>
 
-    <!-- SCREEN 3: STUDENT BROADCAST -->
-    <div id="student-screen" class="screen">
-      <h2>Broadcasting BLE</h2>
-      <p style="font-size: 13px; color: var(--text-muted);">Seeking active faculty scans...</p>
+    <!-- MAIN BODY -->
+    <div class="app-screen-body">
 
-      <div class="beacon-container">
-        <div class="beacon">
-          <span class="timer-ring" id="timer">30</span>
+      <!-- ANIME HERO CLASSROOM CARD -->
+      <div class="anime-hero-card">
+        <!-- SVG Anime Classroom Illustration -->
+        <svg class="anime-hero-bg" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#1e1b4b"/>
+              <stop offset="50%" stop-color="#312e81"/>
+              <stop offset="100%" stop-color="#4338ca"/>
+            </linearGradient>
+            <linearGradient id="sunsetGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.6"/>
+              <stop offset="60%" stop-color="#f59e0b" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+            </linearGradient>
+            <linearGradient id="boardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#064e3b"/>
+              <stop offset="100%" stop-color="#022c22"/>
+            </linearGradient>
+          </defs>
+          <!-- Classroom Window & Sky -->
+          <rect width="800" height="400" fill="url(#skyGrad)"/>
+          <rect width="800" height="400" fill="url(#sunsetGrad)"/>
+          <!-- Window Arches -->
+          <path d="M 50 400 L 50 160 A 80 80 0 0 1 210 160 L 210 400 Z" fill="rgba(255,255,255,0.08)"/>
+          <path d="M 250 400 L 250 160 A 80 80 0 0 1 410 160 L 410 400 Z" fill="rgba(255,255,255,0.08)"/>
+          <path d="M 450 400 L 450 160 A 80 80 0 0 1 610 160 L 610 400 Z" fill="rgba(255,255,255,0.08)"/>
+          <!-- Sun Beam Particles -->
+          <circle cx="130" cy="190" r="3" fill="#fde047" opacity="0.6"/>
+          <circle cx="170" cy="240" r="2" fill="#fde047" opacity="0.5"/>
+          <circle cx="320" cy="210" r="3.5" fill="#fde047" opacity="0.7"/>
+          <circle cx="360" cy="280" r="2" fill="#fde047" opacity="0.4"/>
+          <circle cx="510" cy="220" r="3" fill="#fde047" opacity="0.6"/>
+          <!-- Chalkboard -->
+          <rect x="220" y="50" width="360" height="130" rx="8" fill="url(#boardGrad)" stroke="#78350f" stroke-width="5"/>
+          <text x="240" y="80" fill="#a7f3d0" font-size="14" font-family="monospace">AMRITA CSE450 • ATTENDANCE</text>
+          <text x="240" y="105" fill="#6ee7b7" font-size="12" font-family="monospace">Policy: Threshold >= 75%</text>
+          <text x="240" y="130" fill="#93c5fd" font-size="12" font-family="monospace">BLE Nonce: SHA256(Token + Key)</text>
+          <text x="240" y="155" fill="#fbcfe8" font-size="12" font-family="monospace">Proxy Lock: Hardware Biometric</text>
+          <!-- Modern Classroom Desks -->
+          <path d="M 0 350 L 800 350 L 800 400 L 0 400 Z" fill="#0f172a" opacity="0.8"/>
+          <polygon points="100,320 220,320 200,370 80,370" fill="#1e293b"/>
+          <polygon points="300,320 420,320 400,370 280,370" fill="#1e293b"/>
+          <polygon points="500,320 620,320 600,370 480,370" fill="#1e293b"/>
+        </svg>
+
+        <div class="anime-hero-overlay">
+          <div class="hero-badge-row">
+            <span class="hero-pill ble">📡 BLE Proximity</span>
+            <span class="hero-pill room">🏛️ Hall A-302</span>
+          </div>
+          <div class="hero-title">Distributed Systems Lab</div>
+          <div class="hero-subtitle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span>Mon & Wed • 09:30 AM - 11:30 AM</span>
+          </div>
         </div>
-        <p style="margin-top: 16px; font-weight: 500; font-size: 14px;">Rotating Token payload:</p>
-        <span class="token-text" id="token-display">token_sig3098e98342..</span>
       </div>
 
-      <div class="card" style="margin-bottom: 12px;">
-        <h5 style="margin-bottom: 6px; font-size: 13px;">Proximity Security Model:</h5>
-        <p style="font-size: 12px; color: var(--text-muted);">Root HMAC keys are kept secure inside private
-          subcollections. The student's device receives rolling fragments on demand.</p>
-      </div>
-
-      <button class="secondary back-btn" onclick="stopStudentPortal()">Back to Portal</button>
-    </div>
-
-    <!-- SCREEN 4: FACULTY SCANNER -->
-    <div id="faculty-screen" class="screen">
-      <div class="flex-row">
-        <h2>BLE Scanner</h2>
-        <div class="radar-circle"></div>
-      </div>
-      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Resolving proximity and HMAC tokens</p>
-
-      <h5 style="margin-bottom: 8px; font-weight: 600;">Detected Students (Real-time):</h5>
-      <div class="scan-list" id="scan-list-container">
-        <!-- Rendered dynamically in JS to simulate real BLE packet transfers -->
-      </div>
-
-      <div class="card" style="margin-top: 12px; margin-bottom: 12px;">
-        <h5 style="margin-bottom: 4px; font-size: 13px;">Server-Side Verification</h5>
-        <div style="font-size: 11px; color: var(--text-muted);">
-          Submission triggers <code>markAttendance()</code> to verify payload hashes and enforce RSSI proximity
-          thresholds (e.g. RSSI > -75dBm).
+      <!-- ROLE TOGGLE CHIPS -->
+      <div class="role-pills-bar">
+        <div class="role-tab active" onclick="switchRole('student')">
+          <span>🎓</span>
+          <span>Student</span>
+        </div>
+        <div class="role-tab" onclick="switchRole('faculty')">
+          <span>📡</span>
+          <span>Faculty</span>
+        </div>
+        <div class="role-tab" onclick="switchRole('admin')">
+          <span>🛡️</span>
+          <span>Admin</span>
         </div>
       </div>
 
-      <button onclick="submitAttendance()">Submit verified roll</button>
-      <button class="secondary back-btn" onclick="stopFacultyPortal()" style="margin-top: 8px;">Back to Portal</button>
+      <!-- ==================== 1. STUDENT VIEW ==================== -->
+      <div id="studentPanel" class="panel active">
+
+        <!-- STUDENT PROFILE CARD -->
+        <div class="glass-card">
+          <div class="profile-banner">
+            <div class="anime-avatar">
+              <!-- Anime Student Avatar SVG -->
+              <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="50" cy="50" r="50" fill="#312e81"/>
+                <!-- Anime Hair Back -->
+                <path d="M 20 50 Q 15 20 50 15 Q 85 20 80 50 Z" fill="#1e1b4b"/>
+                <!-- Face -->
+                <ellipse cx="50" cy="55" rx="25" ry="28" fill="#fed7aa"/>
+                <!-- Anime Eyes -->
+                <ellipse cx="40" cy="52" rx="4" ry="6" fill="#1e1b4b"/>
+                <circle cx="41" cy="50" r="1.5" fill="#ffffff"/>
+                <ellipse cx="60" cy="52" rx="4" ry="6" fill="#1e1b4b"/>
+                <circle cx="61" cy="50" r="1.5" fill="#ffffff"/>
+                <!-- Smile -->
+                <path d="M 46 68 Q 50 72 54 68" stroke="#9a3412" stroke-width="1.8" stroke-linecap="round"/>
+                <!-- Anime Front Hair Bangs -->
+                <path d="M 22 35 Q 35 48 38 42 Q 48 20 50 45 Q 56 22 65 42 Q 72 32 78 40 Q 75 18 50 16 Q 25 18 22 35 Z" fill="#4338ca"/>
+                <!-- Blazer Uniform -->
+                <path d="M 25 90 L 35 76 L 50 82 L 65 76 L 75 90 Z" fill="#1e293b"/>
+                <path d="M 46 76 L 50 86 L 54 76 Z" fill="#f43f5e"/>
+              </svg>
+              <div class="avatar-status-badge"></div>
+            </div>
+            <div class="profile-info">
+              <h3>Aarav 'Ren' Patel</h3>
+              <p>aarav.p@ch.students.amrita.edu</p>
+              <div class="profile-tags">
+                <span class="micro-tag">Roll #AM.EN.U4CSE21001</span>
+                <span class="micro-tag" style="background: rgba(16,185,129,0.15); color: #34d399; border-color: rgba(16,185,129,0.3);">Verified</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FINGERPRINT ANTI-PROXY CHECK-IN CARD -->
+        <div class="glass-card fingerprint-card">
+          <h4 style="font-size: 15px; font-weight: 700;">Anti-Proxy Fingerprint Lock</h4>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+            Touch sensor to verify your registered finger and mark classroom attendance.
+          </p>
+
+          <div class="scanner-pad" id="fingerprintPad" onclick="triggerBiometricScan()">
+            <div class="laser-scan-line"></div>
+            <svg class="fingerprint-svg" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/>
+              <path d="M14 13.12c0 2.38 0 6.38-1 8.88"/>
+              <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/>
+              <path d="M2 12a10 10 0 0 1 18-6"/>
+              <path d="M2 16h.01"/>
+              <path d="M21.8 16c.2-2 .131-5.354 0-6"/>
+              <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/>
+              <path d="M8.65 22c.21-.66.45-1.32.57-2"/>
+              <path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>
+            </svg>
+          </div>
+
+          <div class="scanner-status-text" id="scanStatusTitle">Touch to Scan Fingerprint</div>
+          <div class="scanner-status-desc" id="scanStatusDesc">Proxy attendance by others is cryptographically rejected</div>
+        </div>
+
+        <!-- 75% ATTENDANCE POLICY DIAL CARD -->
+        <div class="glass-card">
+          <div class="attendance-stats-grid">
+            <div class="circular-progress-wrap">
+              <svg>
+                <defs>
+                  <linearGradient id="emerald-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#10b981"/>
+                    <stop offset="100%" stop-color="#06b6d4"/>
+                  </linearGradient>
+                </defs>
+                <circle class="circle-bg" cx="50" cy="50" r="42"/>
+                <circle class="circle-fill" id="policyCircle" cx="50" cy="50" r="42"/>
+              </svg>
+              <div class="circle-center-text">
+                <div class="pct" id="attPctDisplay">85%</div>
+                <div class="lbl">Standing</div>
+              </div>
+            </div>
+
+            <div class="stats-details">
+              <h4>Amrita 75% Attendance Standing</h4>
+              <p>You have attended <b style="color:white;">34 / 40</b> required lectures this semester.</p>
+              <div class="condonation-pill">🛡️ Safe Zone (+4 Margin)</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ==================== 2. FACULTY SCANNER VIEW ==================== -->
+      <div id="facultyPanel" class="panel">
+
+        <div class="glass-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div>
+              <h4 style="font-size: 15px; font-weight: 700;">Live Classroom Radar</h4>
+              <p style="font-size: 11px; color: var(--text-muted);">Scanning for enrolled student BLE beacons</p>
+            </div>
+            <span class="badge-check" style="background: rgba(99,102,241,0.2); color: #818cf8;">
+              Active Session
+            </span>
+          </div>
+
+          <!-- ANIMATED RADAR SWEEP -->
+          <div class="radar-canvas-wrap">
+            <div class="radar-sweep-disc">
+              <div class="radar-arm"></div>
+              <!-- Simulated student blips -->
+              <div class="radar-blip" style="top: 30px; left: 45px;"></div>
+              <div class="radar-blip" style="top: 110px; left: 120px; animation-delay: 0.5s;"></div>
+              <div class="radar-blip" style="top: 80px; left: 30px; animation-delay: 0.9s;"></div>
+              <div class="radar-blip" style="top: 40px; left: 110px; animation-delay: 1.2s;"></div>
+            </div>
+          </div>
+
+          <!-- RSSI TUNER SLIDER -->
+          <div class="slider-box">
+            <div class="slider-header">
+              <span>Proximity Threshold (RSSI Filter)</span>
+              <span id="rssiValueLabel">-68 dBm (~2.5m)</span>
+            </div>
+            <input type="range" min="-95" max="-40" value="-68" oninput="updateRssi(this.value)">
+          </div>
+        </div>
+
+        <!-- LIVE ATTENDANCE ROSTER -->
+        <div class="glass-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="font-size: 14px; font-weight: 700;">Classroom Detection Feed</h4>
+            <span style="font-size: 12px; color: var(--emerald); font-weight: 700;">4 / 4 Present</span>
+          </div>
+
+          <div class="student-item verified">
+            <div class="stu-left">
+              <div class="stu-mini-avatar">👨‍🎓</div>
+              <div>
+                <div class="stu-name">Aarav Patel</div>
+                <div class="stu-roll">AM.EN.U4CSE21001 • RSSI -62 dBm</div>
+              </div>
+            </div>
+            <span class="badge-check">✓ Fingerprint Verified</span>
+          </div>
+
+          <div class="student-item verified">
+            <div class="stu-left">
+              <div class="stu-mini-avatar">👩‍🎓</div>
+              <div>
+                <div class="stu-name">Diya Sharma</div>
+                <div class="stu-roll">AM.EN.U4CSE21045 • RSSI -68 dBm</div>
+              </div>
+            </div>
+            <span class="badge-check">✓ Fingerprint Verified</span>
+          </div>
+
+          <div class="student-item verified">
+            <div class="stu-left">
+              <div class="stu-mini-avatar">👨‍🎓</div>
+              <div>
+                <div class="stu-name">Ren Vikram</div>
+                <div class="stu-roll">AM.EN.U4CSE21089 • RSSI -71 dBm</div>
+              </div>
+            </div>
+            <span class="badge-check">✓ Fingerprint Verified</span>
+          </div>
+
+          <div class="student-item verified">
+            <div class="stu-left">
+              <div class="stu-mini-avatar">👩‍🎓</div>
+              <div>
+                <div class="stu-name">Ananya Iyer</div>
+                <div class="stu-roll">AM.EN.U4CSE21102 • RSSI -65 dBm</div>
+              </div>
+            </div>
+            <span class="badge-check">✓ Fingerprint Verified</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ==================== 3. ADMIN PORTAL VIEW ==================== -->
+      <div id="adminPanel" class="panel">
+
+        <div class="glass-card">
+          <h4 style="font-size: 15px; font-weight: 700;">Admin Verification Console</h4>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+            Authoritative Server Claims Gate: clients cannot self-elevate roles or status.
+          </p>
+
+          <div style="margin-top: 14px;">
+            <div class="student-item" id="pendingCard1" style="border-left-color: var(--amber);">
+              <div class="stu-left">
+                <div class="stu-mini-avatar">👨‍🎓</div>
+                <div>
+                  <div class="stu-name">Kavya Krishnan</div>
+                  <div class="stu-roll">k.krishnan@ch.students.amrita.edu</div>
+                </div>
+              </div>
+              <button onclick="approveStudent('pendingCard1')" style="width: auto; padding: 6px 12px; font-size: 11px; background: var(--emerald); border-radius: 8px; border: none; color: white; cursor: pointer; font-weight: 700;">
+                Approve
+              </button>
+            </div>
+
+            <div class="student-item" id="pendingCard2" style="border-left-color: var(--amber);">
+              <div class="stu-left">
+                <div class="stu-mini-avatar">👩‍🏫</div>
+                <div>
+                  <div class="stu-name">Dr. R. Sundaram</div>
+                  <div class="stu-roll">r.sundaram@ch.amrita.edu</div>
+                </div>
+              </div>
+              <button onclick="approveStudent('pendingCard2')" style="width: auto; padding: 6px 12px; font-size: 11px; background: var(--emerald); border-radius: 8px; border: none; color: white; cursor: pointer; font-weight: 700;">
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <h4 style="font-size: 14px; font-weight: 700;">PostgreSQL Live Integrity</h4>
+          <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span>Database Status:</span>
+              <span style="color: var(--emerald); font-weight: 700;">Connected (24 ms)</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>Alembic Migrations:</span>
+              <span style="color: var(--cyan); font-weight: 700;">10 Tables Applied</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>CWE-1236 Formula Defense:</span>
+              <span style="color: var(--emerald); font-weight: 700;">Active</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
     </div>
+
+    <!-- PHONE BOTTOM DOCK -->
+    <div class="phone-dock">
+      <div class="dock-tab active" onclick="switchRole('student')">
+        <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        <span>Student</span>
+      </div>
+      <div class="dock-tab" onclick="switchRole('faculty')">
+        <svg viewBox="0 0 24 24"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path><circle cx="12" cy="12" r="2"></circle><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"></path></svg>
+        <span>Beacon</span>
+      </div>
+      <div class="dock-tab" onclick="switchRole('admin')">
+        <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        <span>Admin</span>
+      </div>
+    </div>
+
   </div>
 
   <script>
-    // Global Error Catcher for Remote Debugging
-    window.onerror = function (message, source, lineno, colno, error) {
-      const errDisplay = document.getElementById('error-console');
-      const errMsg = document.getElementById('error-message');
-      if (errDisplay && errMsg) {
-        errMsg.innerText = `${message} (Line: ${lineno}:${colno})`;
-        errDisplay.style.display = 'block';
+    // VIEWPORT TOGGLE
+    function setMode(mode) {
+      const chassis = document.getElementById('phoneContainer');
+      const btns = document.querySelectorAll('.mode-btn');
+      btns.forEach(b => b.classList.remove('active'));
+      
+      if (mode === 'tablet') {
+        chassis.classList.add('tablet-mode');
+        btns[1].classList.add('active');
+      } else {
+        chassis.classList.remove('tablet-mode');
+        btns[0].classList.add('active');
       }
-      return false;
-    };
+    }
 
-    function goToScreen(screenId) {
-      console.log('Switching to screen:', screenId);
-      const target = document.getElementById(screenId);
-      if (!target) {
-        throw new Error(`Target screen element with ID "${screenId}" does not exist in DOM.`);
-      }
+    // ROLE SWITCHER
+    function switchRole(role) {
+      const panels = ['student', 'faculty', 'admin'];
+      panels.forEach(p => {
+        const el = document.getElementById(p + 'Panel');
+        if (el) el.classList.remove('active');
+      });
+      document.getElementById(role + 'Panel').classList.add('active');
 
-      const screens = document.querySelectorAll('.screen');
-      screens.forEach(s => {
-        s.classList.remove('active');
+      const tabs = document.querySelectorAll('.role-tab');
+      tabs.forEach((t, i) => {
+        t.classList.toggle('active', panels[i] === role);
       });
 
-      target.classList.add('active');
+      const dockTabs = document.querySelectorAll('.dock-tab');
+      dockTabs.forEach((d, i) => {
+        d.classList.toggle('active', panels[i] === role);
+      });
     }
 
-    function requestBiometrics() {
-      const email = document.getElementById('email').value.trim();
-      // Set the display name role dynamically just for the mock select view
-      const roleText = email.includes('faculty') ? 'faculty' : 'student';
-      console.log('Login attempt with role:', roleText);
-      document.getElementById('biometric-modal').style.display = 'block';
-    }
+    // BIOMETRIC SCAN INTERACTION
+    let isScanning = false;
+    function triggerBiometricScan() {
+      if (isScanning) return;
+      isScanning = true;
 
-    function grantBiometrics() {
-      document.getElementById('biometric-modal').style.display = 'none';
-      goToScreen('role-screen');
-    }
+      const pad = document.getElementById('fingerprintPad');
+      const title = document.getElementById('scanStatusTitle');
+      const desc = document.getElementById('scanStatusDesc');
 
-    /* STUDENT PORTAL CODE */
-    let timerInterval = null;
-    function openStudentPortal() {
-      goToScreen('student-screen');
-      startTimer();
-    }
+      pad.className = 'scanner-pad scanning';
+      title.innerText = 'Scanning Fingerprint...';
+      title.style.color = 'var(--cyan)';
+      desc.innerText = 'Verifying hardware biometric against enrolled profile';
 
-    function stopStudentPortal() {
-      clearInterval(timerInterval);
-      goToScreen('role-screen');
-    }
-
-    function startTimer() {
-      clearInterval(timerInterval);
-      let count = 30;
-      const timerSpan = document.getElementById('timer');
-      const tokenSpan = document.getElementById('token-display');
-
-      if (!timerSpan || !tokenSpan) {
-        throw new Error("Student timer elements not found in DOM");
+      // Haptic feedback if on phone
+      if (navigator.vibrate) {
+        navigator.vibrate([30, 40, 30]);
       }
 
-      const tokens = [
-        "c681b51e0ffae38a9da9",
-        "fb345aef34d8ef89bd48",
-        "98a48caf23db8f6ac12c",
-        "a4f89d38c6b78ae0ea18"
-      ];
-      let tIdx = 0;
-
-      timerSpan.innerText = count;
-      tokenSpan.innerText = tokens[tIdx];
-
-      timerInterval = setInterval(() => {
-        count--;
-        if (count < 0) {
-          count = 30;
-          tIdx = (tIdx + 1) % tokens.length;
-          tokenSpan.innerText = tokens[tIdx];
+      setTimeout(() => {
+        pad.className = 'scanner-pad verified';
+        title.innerText = '✓ Biometric Match Confirmed!';
+        title.style.color = 'var(--emerald)';
+        desc.innerText = 'Presence cryptographically validated • Session Bound';
+        
+        if (navigator.vibrate) {
+          navigator.vibrate([60]);
         }
-        timerSpan.innerText = count;
-      }, 1000);
+        isScanning = false;
+      }, 1400);
     }
 
-    /* FACULTY SCANNER CODE (DYNAMIC REAL-TIME SIMULATION) */
-    let scanInterval = null;
-    const studentsData = [
-      { id: '20892', name: 'Roland Stark', rssi: -65, count: 5, active: true },
-      { id: '20901', name: 'Priya Kumar', rssi: -87, count: 2, active: false },
-      { id: '25020', name: 'Jagan Raj (You)', rssi: -58, count: 6, active: true },
-      { id: '20194', name: 'Ananya Sen', rssi: -71, count: 4, active: true }
-    ];
-
-    function openFacultyPortal() {
-      goToScreen('faculty-screen');
-      renderScanList();
-      startScanSimulation();
+    // RSSI TUNER
+    function updateRssi(val) {
+      const label = document.getElementById('rssiValueLabel');
+      const dist = (Math.pow(10, (-59 - val) / (10 * 2.2))).toFixed(1);
+      label.innerText = `${val} dBm (~${dist}m)`;
     }
 
-    function stopFacultyPortal() {
-      clearInterval(scanInterval);
-      goToScreen('role-screen');
-    }
-
-    function renderScanList() {
-      const container = document.getElementById('scan-list-container');
-      if (!container) return;
-
-      container.innerHTML = '';
-
-      // Sort students dynamically by signal strength (RSSI)
-      const sorted = [...studentsData].sort((a, b) => b.rssi - a.rssi);
-
-      sorted.forEach(student => {
-        const item = document.createElement('div');
-        item.id = `student-card-${student.id}`;
-
-        // Define statuses based on RSSI compliance (RSSI > -75dBm is Verified / Present)
-        const isVerified = student.rssi > -75;
-        item.className = `scan-item ${isVerified ? 'verified' : ''}`;
-
-        item.innerHTML = `
-          <div class="device-info">
-            <h4>${student.name} (${student.id})</h4>
-            <p id="packet-details-${student.id}">RSSI: ${student.rssi} dBm | Packet Count: ${student.count}</p>
+    // ADMIN APPROVE
+    function approveStudent(cardId) {
+      const card = document.getElementById(cardId);
+      if (card) {
+        card.style.borderLeftColor = 'var(--emerald)';
+        card.innerHTML = `
+          <div class="stu-left">
+            <div class="stu-mini-avatar" style="background: rgba(16,185,129,0.2);">✓</div>
+            <div>
+              <div class="stu-name" style="color: #6ee7b7;">Approved & Claims Stamped</div>
+              <div class="stu-roll">PostgreSQL record updated • Active</div>
+            </div>
           </div>
-          <span style="color: ${isVerified ? 'var(--green)' : 'var(--text-muted)'}; font-size: 12px; font-weight: bold;">
-            ${isVerified ? 'Verified' : 'OutOfRange'}
-          </span>
+          <span class="badge-check">Synced</span>
         `;
-        container.appendChild(item);
-      });
-    }
-
-    function startScanSimulation() {
-      clearInterval(scanInterval);
-      scanInterval = setInterval(() => {
-        // Randomly pick a student to simulate receiving a packet
-        const randomIdx = Math.floor(Math.random() * studentsData.length);
-        const student = studentsData[randomIdx];
-
-        // Fluctuating RSSI between +/- 3 dBm
-        const delta = Math.floor(Math.random() * 7) - 3;
-        student.rssi = Math.max(-100, Math.min(-40, student.rssi + delta));
-
-        // Increment packet scan count
-        student.count++;
-
-        // Re-render scanner display
-        renderScanList();
-
-        // Highlight the card that got the packet update
-        const card = document.getElementById(`student-card-${student.id}`);
-        if (card) {
-          card.classList.add('packet-pulse');
-          setTimeout(() => card.classList.remove('packet-pulse'), 400);
-        }
-      }, 1500);
-    }
-
-    function submitAttendance() {
-      alert("HTTP POST -> markAttendance() called successfully!\nVerified rolls submitted to Firestore cloud, automated email notifications triggered.");
+      }
     }
   </script>
 </body>
-
 </html>

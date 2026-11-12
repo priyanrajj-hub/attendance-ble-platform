@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
@@ -38,6 +39,31 @@ preview_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if os.path.exists(preview_path):
     app.mount("/app", StaticFiles(directory=preview_path, html=True), name="app")
 
+# Direct APK binary download route
+apk_path = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "build",
+        "app",
+        "outputs",
+        "flutter-apk",
+        "app-prod-debug.apk",
+    )
+)
+
+
+@app.get("/download/app.apk")
+async def download_apk():
+    if os.path.exists(apk_path):
+        return FileResponse(
+            path=apk_path,
+            filename="AmritaAttendance-prod-debug.apk",
+            media_type="application/vnd.android.package-archive",
+        )
+    return {"error": "APK not found. Please compile the app first."}
+
 
 @app.get("/")
 async def root():
@@ -45,6 +71,7 @@ async def root():
         "title": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "status": "healthy",
+        "apk_download": "/download/app.apk",
         "mobile_simulator": "/app/",
         "api_docs": f"{settings.API_V1_STR}/docs",
         "health": f"{settings.API_V1_STR}/health",
