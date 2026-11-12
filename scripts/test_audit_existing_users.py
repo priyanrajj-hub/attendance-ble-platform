@@ -123,6 +123,24 @@ class TestAuditExistingUsers(unittest.TestCase):
         self.assertEqual(len(res["anomalies"]), 0)
         self.assertEqual(res["recommended_action"], "NONE")
 
+    def test_auth_lookup_failure_flagged(self):
+        """If Firebase Auth lookup fails (orphaned doc or deleted auth account), it should be FLAGGED."""
+        doc = {
+            "email": "ghost_user@ch.students.amrita.edu",
+            "role": "student",
+            "status": "pending_verification",
+            "createdAt": "2026-07-26T10:00:00Z"
+        }
+        res = evaluate_user_record(
+            doc,
+            uid="ghost_uid_404",
+            auth_email_verified=None,
+            auth_lookup_error="UserNotFoundError: No user record found for given identifier"
+        )
+        self.assertTrue(any("Firebase Auth user lookup error" in a for a in res["anomalies"]))
+        self.assertEqual(res["recommended_action"], "RESET_TO_PENDING_VERIFICATION")
+
+
 
 if __name__ == "__main__":
     unittest.main()
