@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../models/user_profile.dart';
 import '../models/user_role.dart';
 import '../providers/auth_provider.dart';
 import '../screens/auth/login_screen.dart';

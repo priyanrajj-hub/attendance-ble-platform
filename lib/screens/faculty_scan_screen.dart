@@ -177,7 +177,7 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
         actions: [
           Chip(
             label: Text('$presentCount present'),
-            backgroundColor: Colors.green.withValues(alpha: 0.2),
+            backgroundColor: Colors.green.withOpacity(0.2),
           ),
           const SizedBox(width: 8),
         ],
@@ -256,7 +256,7 @@ class _FacultyScanScreenState extends State<FacultyScanScreen> {
                         child: ListTile(
                           leading: CircleAvatar(
                             backgroundColor:
-                                statusColor.withValues(alpha: 0.15),
+                                statusColor.withOpacity(0.15),
                             child: Icon(
                               s.markedPresent
                                   ? Icons.check

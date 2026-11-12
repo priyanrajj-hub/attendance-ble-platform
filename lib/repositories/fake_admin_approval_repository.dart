@@ -31,17 +31,25 @@ class FakeAdminApprovalRepository implements AdminApprovalRepository {
     ),
   ];
 
-  FakeAdminApprovalRepository() {
-    _emit();
-  }
-
   void _emit() {
-    _controller.add(List.unmodifiable(_pendingUsers));
+    if (!_controller.isClosed) {
+      _controller.add(List.unmodifiable(_pendingUsers));
+    }
   }
 
   @override
   Stream<List<PendingUser>> watchPendingUsers() {
-    return _controller.stream;
+    return Stream<List<PendingUser>>.multi((controller) {
+      controller.add(List.unmodifiable(_pendingUsers));
+      final subscription = _controller.stream.listen(
+        controller.add,
+        onError: controller.addError,
+        onDone: controller.close,
+      );
+      controller.onCancel = () {
+        subscription.cancel();
+      };
+    });
   }
 
   @override
