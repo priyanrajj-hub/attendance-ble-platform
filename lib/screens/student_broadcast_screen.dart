@@ -211,7 +211,7 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen>
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: _isBroadcasting
-                      ? Colors.green.withValues(alpha: 0.1)
+                      ? Colors.green.withOpacity(0.1)
                       : colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(16),
                   border: _isBroadcasting

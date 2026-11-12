@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "780907649883",
-    "project_id": "attendance-ble-app-6b0e3",
-    "storage_bucket": "attendance-ble-app-6b0e3.firebasestorage.app"
+    "project_number": "000000000000",
+    "project_id": "attendance-ble-placeholder",
+    "storage_bucket": "attendance-ble-placeholder.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:780907649883:android:b7a510f909d3d6dc35987e",
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
         "android_client_info": {
           "package_name": "com.attendance.ble.attendance_ble_test"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB6ijLLQg4Q1qkcTS-XrYvpXsyghLF0cpQ"
+          "current_key": "YOUR_FIREBASE_API_KEY_HERE"
         }
       ],
       "services": {

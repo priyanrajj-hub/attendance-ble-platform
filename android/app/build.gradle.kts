@@ -1,8 +1,8 @@
 plugins {
     id("com.android.application")
+    id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services")
 }
 
 android {
@@ -15,21 +15,27 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.attendance.ble.attendance_ble_test"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    flavorDimensions += listOf("variant")
+    productFlavors {
+        create("prod") {
+            dimension = "variant"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
@@ -41,12 +47,22 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-    }
-}
+
 
 flutter {
     source = "../.."
 }
+
+// Strict Google Services enforcement:
+// Non-spike / production branch requires valid Firebase configuration.
+// If google-services.json is missing, fail loudly with a fatal GradleException.
+if (!file("google-services.json").exists()) {
+    throw GradleException(
+        "\n=======================================================================\n" +
+        "FATAL: android/app/google-services.json is missing!\n" +
+        "Production builds require a valid Firebase configuration file.\n" +
+        "Please copy your google-services.json into android/app/ before building.\n" +
+        "=======================================================================\n"
+    )
+}
+apply(plugin = "com.google.gms.google-services")

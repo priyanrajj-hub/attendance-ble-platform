@@ -13,6 +13,66 @@ before(async () => {
             port: 8080,
         },
     });
+    it('Client CANNOT forge verifiedBy or verifiedAt on creation', async () => {
+        const studentContext = testEnv.authenticatedContext('studentForge', { email: 'forge@ch.students.amrita.edu' });
+        const db = studentContext.firestore();
+
+        // Attempting to set verifiedBy on creation must fail
+        await assertFails(db.collection('users').doc('studentForge').set({
+            role: 'student',
+            email: 'forge@ch.students.amrita.edu',
+            status: 'pending_verification',
+            verifiedBy: 'adminA',
+            name: 'Bob',
+            rollNo: '123'
+        }));
+
+        // Attempting to set verifiedAt on creation must fail
+        await assertFails(db.collection('users').doc('studentForge').set({
+            role: 'student',
+            email: 'forge@ch.students.amrita.edu',
+            status: 'pending_verification',
+            verifiedAt: new Date().toISOString(),
+            name: 'Bob',
+            rollNo: '123'
+        }));
+    });
+
+    it('Client CANNOT update status, role, verifiedBy, or verifiedAt on update', async () => {
+        const studentAContext = testEnv.authenticatedContext('studentA', { email_verified: true });
+        const db = studentAContext.firestore();
+
+        // 1. Attempting to elevate status to verified must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            status: 'verified'
+        }));
+
+        // 2. Attempting to escalate role to faculty/admin must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            role: 'admin'
+        }));
+
+        // 3. Attempting to forge verifiedBy must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            verifiedBy: 'adminA'
+        }));
+
+        // 4. Updating display name or photoUrl succeeds
+        await assertSucceeds(db.collection('users').doc('studentA').update({
+            name: 'Arun Updated'
+        }));
+    });
+
+    it('Admin client CANNOT directly update user status in Firestore (must use backend API)', async () => {
+        const adminContext = testEnv.authenticatedContext('adminA', { email_verified: true });
+        const db = adminContext.firestore();
+
+        // Admin attempting client-side direct write to student status must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            status: 'verified',
+            verifiedBy: 'adminA'
+        }));
+    });
 });
 
 beforeEach(async () => {
@@ -33,6 +93,66 @@ beforeEach(async () => {
         await db.collection('users').doc('adminA').set({
             role: 'admin', email: 'admin@ch.amrita.edu', status: 'verified'
         });
+    });
+    it('Client CANNOT forge verifiedBy or verifiedAt on creation', async () => {
+        const studentContext = testEnv.authenticatedContext('studentForge', { email: 'forge@ch.students.amrita.edu' });
+        const db = studentContext.firestore();
+
+        // Attempting to set verifiedBy on creation must fail
+        await assertFails(db.collection('users').doc('studentForge').set({
+            role: 'student',
+            email: 'forge@ch.students.amrita.edu',
+            status: 'pending_verification',
+            verifiedBy: 'adminA',
+            name: 'Bob',
+            rollNo: '123'
+        }));
+
+        // Attempting to set verifiedAt on creation must fail
+        await assertFails(db.collection('users').doc('studentForge').set({
+            role: 'student',
+            email: 'forge@ch.students.amrita.edu',
+            status: 'pending_verification',
+            verifiedAt: new Date().toISOString(),
+            name: 'Bob',
+            rollNo: '123'
+        }));
+    });
+
+    it('Client CANNOT update status, role, verifiedBy, or verifiedAt on update', async () => {
+        const studentAContext = testEnv.authenticatedContext('studentA', { email_verified: true });
+        const db = studentAContext.firestore();
+
+        // 1. Attempting to elevate status to verified must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            status: 'verified'
+        }));
+
+        // 2. Attempting to escalate role to faculty/admin must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            role: 'admin'
+        }));
+
+        // 3. Attempting to forge verifiedBy must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            verifiedBy: 'adminA'
+        }));
+
+        // 4. Updating display name or photoUrl succeeds
+        await assertSucceeds(db.collection('users').doc('studentA').update({
+            name: 'Arun Updated'
+        }));
+    });
+
+    it('Admin client CANNOT directly update user status in Firestore (must use backend API)', async () => {
+        const adminContext = testEnv.authenticatedContext('adminA', { email_verified: true });
+        const db = adminContext.firestore();
+
+        // Admin attempting client-side direct write to student status must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            status: 'verified',
+            verifiedBy: 'adminA'
+        }));
     });
 });
 
@@ -159,6 +279,66 @@ describe('Firestore Security Rules', () => {
             status: 'pending_verification',
             name: 'Bob',
             rollNo: '123'
+        }));
+    });
+    it('Client CANNOT forge verifiedBy or verifiedAt on creation', async () => {
+        const studentContext = testEnv.authenticatedContext('studentForge', { email: 'forge@ch.students.amrita.edu' });
+        const db = studentContext.firestore();
+
+        // Attempting to set verifiedBy on creation must fail
+        await assertFails(db.collection('users').doc('studentForge').set({
+            role: 'student',
+            email: 'forge@ch.students.amrita.edu',
+            status: 'pending_verification',
+            verifiedBy: 'adminA',
+            name: 'Bob',
+            rollNo: '123'
+        }));
+
+        // Attempting to set verifiedAt on creation must fail
+        await assertFails(db.collection('users').doc('studentForge').set({
+            role: 'student',
+            email: 'forge@ch.students.amrita.edu',
+            status: 'pending_verification',
+            verifiedAt: new Date().toISOString(),
+            name: 'Bob',
+            rollNo: '123'
+        }));
+    });
+
+    it('Client CANNOT update status, role, verifiedBy, or verifiedAt on update', async () => {
+        const studentAContext = testEnv.authenticatedContext('studentA', { email_verified: true });
+        const db = studentAContext.firestore();
+
+        // 1. Attempting to elevate status to verified must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            status: 'verified'
+        }));
+
+        // 2. Attempting to escalate role to faculty/admin must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            role: 'admin'
+        }));
+
+        // 3. Attempting to forge verifiedBy must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            verifiedBy: 'adminA'
+        }));
+
+        // 4. Updating display name or photoUrl succeeds
+        await assertSucceeds(db.collection('users').doc('studentA').update({
+            name: 'Arun Updated'
+        }));
+    });
+
+    it('Admin client CANNOT directly update user status in Firestore (must use backend API)', async () => {
+        const adminContext = testEnv.authenticatedContext('adminA', { email_verified: true });
+        const db = adminContext.firestore();
+
+        // Admin attempting client-side direct write to student status must fail
+        await assertFails(db.collection('users').doc('studentA').update({
+            status: 'verified',
+            verifiedBy: 'adminA'
         }));
     });
 });
