@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
+from app.routers import health
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -19,6 +20,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Routers
+app.include_router(health.router, prefix=settings.API_V1_STR)
+
 
 @app.get("/")
 async def root():
@@ -26,5 +30,6 @@ async def root():
         "title": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "status": "healthy",
+        "health": f"{settings.API_V1_STR}/health",
         "docs": f"{settings.API_V1_STR}/docs",
     }
