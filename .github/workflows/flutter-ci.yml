@@ -8,11 +8,17 @@ on:
 
 jobs:
   flutter-test:
-    name: Flutter Analyze & Unit Tests
+    name: Flutter Analyze, Unit Tests & Build Verification
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -36,3 +42,7 @@ jobs:
 
       - name: Run Flutter Tests
         run: flutter test --no-pub
+
+      - name: Build Prod APK (Compile Verification - Zero Artifact Upload)
+        run: flutter build apk --flavor prod -t lib/main.dart --no-pub
+        # NOTE: actions/upload-artifact is intentionally omitted to avoid leaking binaries on public repository.
