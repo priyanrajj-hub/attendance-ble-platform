@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/user_role.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/biometric_service.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -34,6 +35,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _errorMessage = null);
+
+    // 1. Enforce Fingerprint Anti-Proxy Device Registration
+    final bioService = ref.read(biometricServiceProvider);
+    final bioResult = await bioService.registerFingerprintBinding();
+    if (!bioResult.isSuccess) {
+      setState(() {
+        _errorMessage = bioResult.errorMessage ??
+            'Fingerprint registration is required. You must scan your finger to bind this device to your identity.';
+      });
+      return;
+    }
 
     try {
       await ref.read(authControllerProvider.notifier).register(
@@ -225,7 +237,50 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF283593).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFF283593).withOpacity(0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.fingerprint,
+                            color: Color(0xFF283593),
+                            size: 28,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Anti-Proxy Fingerprint Binding',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Your fingerprint will be registered to bind this device to your identity. Proxy attendance by others is permanently blocked.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     ElevatedButton(
                       onPressed: isLoading ? null : _handleRegister,
                       style: ElevatedButton.styleFrom(
