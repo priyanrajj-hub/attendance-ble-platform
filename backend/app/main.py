@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import health, auth, admin, ai_agent, courses, sessions, roster, reports, checkin_stub
+from app.routers import health, auth, admin, ai_agent, courses, sessions, roster, reports, checkin_stub, data_pipeline
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -33,6 +33,7 @@ app.include_router(sessions.router, prefix=settings.API_V1_STR)
 app.include_router(roster.router, prefix=settings.API_V1_STR)
 app.include_router(reports.router, prefix=settings.API_V1_STR)
 app.include_router(checkin_stub.router, prefix=settings.API_V1_STR)
+app.include_router(data_pipeline.router, prefix=settings.API_V1_STR)
 
 # Mount interactive mobile simulator
 preview_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "mock_preview"))

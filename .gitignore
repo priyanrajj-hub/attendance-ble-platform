@@ -49,12 +49,23 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# === Secrets & Environment ===
+# === Secrets & Environment Protection (Strict Zero-Leak) ===
 .env
 .env.*
-!.env.example
+*.env
+.env.example
+*.env.example
+secrets/
+credentials/
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+*firebase-admin*.json
+*serviceAccountKey*.json
 
-# === Test & Audit Misc ===
+# === Test, Data & Audit Misc ===
 coverage/
 users.json
 firebase-test.json
@@ -63,9 +74,14 @@ audit_*.json
 *.patch
 *.diff
 
+# === Python & Data Engineering ===
 __pycache__/
 *.pyc
 .venv/
 backend/.venv/
-__pycache__/
 .pytest_cache/
+spark-warehouse/
+metastore_db/
+derby.log
+data/telemetry/raw/
+data/parquet/
