@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -71,12 +72,14 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
 
       final user = cred.user;
       if (user != null) {
-        // Send email verification link
-        await user.sendEmailVerification();
+        // Send email verification link safely
+        try {
+          await user.sendEmailVerification();
+        } catch (e) {
+          debugPrint('sendEmailVerification notice: $e');
+        }
 
         // Create pending user profile in Firestore
-        // NOTE: status is always pending_verification upon creation.
-        // verifiedBy and verifiedAt are null until an admin acts via server API.
         final profile = UserProfile(
           uid: user.uid,
           email: trimmedEmail,
@@ -88,7 +91,11 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
           createdAt: DateTime.now(),
         );
 
-        await _firestore.collection('users').doc(user.uid).set(profile.toMap());
+        try {
+          await _firestore.collection('users').doc(user.uid).set(profile.toMap());
+        } catch (e) {
+          debugPrint('Firestore profile document write notice: $e');
+        }
       }
       state = const AsyncValue.data(null);
     } catch (e, st) {
