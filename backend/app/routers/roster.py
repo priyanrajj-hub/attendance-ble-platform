@@ -26,6 +26,8 @@ def sanitize_formula_injection(val: str) -> str:
     """
     if not val:
         return ""
+    if val.startswith(FORMULA_PREFIXES):
+        return "'" + val
     cleaned = str(val).strip()
     if cleaned.startswith(FORMULA_PREFIXES):
         return "'" + cleaned
@@ -47,6 +49,14 @@ async def import_course_roster(
     3. Formula injection sanitization on all text fields.
     4. Institutional email domain verification.
     """
+    # 1. Read bytes and enforce size limit
+    content = await file.read()
+    if len(content) > settings.MAX_CSV_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"File exceeds maximum upload size limit of {settings.MAX_CSV_UPLOAD_SIZE_BYTES} bytes (2 MB).",
+        )
+
     try:
         cid = uuid.UUID(course_id)
     except ValueError:
@@ -58,14 +68,6 @@ async def import_course_roster(
     course = c_res.scalar_one_or_none()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
-
-    # 1. Read bytes and enforce size limit
-    content = await file.read()
-    if len(content) > settings.MAX_CSV_UPLOAD_SIZE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File exceeds maximum upload size limit of {settings.MAX_CSV_UPLOAD_SIZE_BYTES} bytes (2 MB).",
-        )
 
     # 2. Enforce strict UTF-8 decoding
     try:
