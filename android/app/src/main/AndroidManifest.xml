@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Required on Android 12+ (API 31+) -->
     <!-- BLUETOOTH_SCAN is declared per-flavor in src/prod/AndroidManifest.xml -->
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
