@@ -23,6 +23,8 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == userId &&
           request.resource.data.keys().hasOnly(['name', 'rollNo', 'role', 'email', 'parentEmail', 'photoUrl', 'status', 'uidPrefix', 'createdAt']) &&
           request.resource.data.status == 'pending_verification' &&
+          !('verifiedBy' in request.resource.data) &&
+          !('verifiedAt' in request.resource.data) &&
           request.resource.data.email == request.auth.token.email &&
           (
             (request.resource.data.role == 'student' &&
@@ -32,12 +34,10 @@ service cloud.firestore {
              request.auth.token.email.matches('^[a-zA-Z0-9._-]+@ch\\.amrita\\.edu$'))
           );
 
-      // Block users from modifying role/status. 
+      // Block all clients (including admins) from updating status, role, verifiedBy, or verifiedAt.
+      // Server-side Firebase Admin SDK bypasses security rules, so backend approvals remain authoritative.
       allow update: if request.auth != null && request.auth.uid == userId &&
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'role']);
-
-      // Admins can update any user document (approve/reject, set role).
-      allow update: if request.auth != null && isAdmin();
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'role', 'verifiedBy', 'verifiedAt']);
     }
 
     // ── Sessions collection ───────────────────────────────────────
