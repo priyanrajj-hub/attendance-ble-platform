@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     MAX_CSV_UPLOAD_SIZE_BYTES: int = 2 * 1024 * 1024  # 2 MB max
 
+    # Hugging Face AI Agent Integration
+    HUGGINGFACE_API_TOKEN: Optional[str] = None
+    HUGGINGFACE_MODEL_ID: str = "priyanrajj/attendanceagent"
+    HUGGINGFACE_BUCKET_ID: str = "priyanrajj/attendanceagent-bucket"
+    HUGGINGFACE_API_URL: str = "https://api-inference.huggingface.co/models/priyanrajj/attendanceagent"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
