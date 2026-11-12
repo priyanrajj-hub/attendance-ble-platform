@@ -3,7 +3,7 @@
 **Target System**: Institutional BLE Proximity Mobile Attendance Platform  
 **Target Institution (Launch)**: Amrita Vishwa Vidyapeetham (CCE, Chennai Campus)  
 **Budget Constraint**: Strict $0.00 / Month Free-Tier Ceiling (Zero Credit Card Required)  
-**Document Version**: 2.0.0 (Production Blueprint)  
+**Document Version**: 2.1.0 (Production Blueprint - Refined)  
 
 ---
 
@@ -37,7 +37,7 @@
 1. **`StudentHomeScreen`**: Displays active course cards, aggregate attendance percentage, and minimum-attendance warning banners (<75% threshold).
 2. **`ActiveSessionCard`**: Visual indicator when an active session for an enrolled course is detected.
 3. **`StudentCheckInScreen`**:
-   - *State 1: Pre-flight Permissions*: Pre-prompts explaining why Bluetooth and Biometrics are needed (no GPS location required on Android 12+).
+   - *State 1: Pre-flight Permissions*: Pre-prompts explaining why Bluetooth and Biometrics are needed. Conditional disclosure for Android 8–11 users explaining legacy location requirements.
    - *State 2: Radio Scan / Beacon Discovery*: Listening for active classroom session beacon.
    - *State 3: Biometric Challenge Sheet*: Native BiometricPrompt (fingerprint/face) unlocking the device-bound private key.
    - *State 4: Cryptographic Handshake*: Signing rotating nonce and transmitting attendance proof.
@@ -100,7 +100,7 @@ To ensure absolute adherence to a **strict $0.00 / month budget ceiling**, all c
 | **Edge / Proxy / TLS** | **Cloudflare Free Tier** | - Free Universal SSL/TLS<br>- DDoS mitigation<br>- Basic Web Application Firewall & rate limits | **NO** | Standard free plan requires no payment credentials for DNS, proxy caching, and TLS termination. | [Cloudflare Plans](https://www.cloudflare.com/plans/) |
 | **Error Monitoring** | **Sentry Developer Tier** | - 5,000 error events/month<br>- 10,000 transaction traces/month | **NO** | Ingestion stops at limit; no automatic overage charges. | [Sentry Pricing](https://sentry.io/pricing/) |
 | **CI/CD Pipeline** | **GitHub Actions** | - Unlimited build minutes for public repositories<br>- 2,000 min/mo for private | **NO** | Public repo workflows run completely free. | [GitHub Actions Billing](https://docs.github.com/billing/managing-billing-for-github-actions) |
-| **AI Assistant (Phase 5 - Public Docs Only)** | **Google AI Studio (Gemini API Free)** | - 15 RPM (Requests Per Minute)<br>- 1,500 RPD (Requests Per Day)<br>- Models: `gemini-2.5-flash`, `gemini-1.5-flash-8b` | **NO** | Free tier via Google AI Studio requires only a Google login; no Cloud Billing or card needed. | [Gemini API Pricing](https://ai.google.dev/pricing) |
+| **AI Assistant (Phase 5 - Public Docs Only)** | **Google AI Studio (Gemini API Free)** | - 15 RPM (Requests Per Minute)<br>- 1,500 RPD (Requests Per Day)<br>- Model configurable via `GEMINI_MODEL` env | **NO** | Free tier via Google AI Studio requires only a Google login; no Cloud Billing or card needed. | [Gemini API Pricing](https://ai.google.dev/pricing) |
 
 ### 2.2. Cost Traps Explicitly Excluded
 - **Google Cloud Run**: Requires a linked Cloud Billing account with an active credit card. Excluded to eliminate risk of unexpected compute or Artifact Registry charges.
@@ -273,71 +273,84 @@ CREATE TABLE policy_chunks (
 
 ---
 
-### 3.3. Firestore Spark Quota Calculation (Reads/Writes Analysis)
+### 3.4. Firestore Spark Quota Calculation ($3\times$ Safety Margin & Quota Alert)
 
 Firebase Spark Plan provides **50,000 reads/day** and **20,000 writes/day**.
 
-#### Scenario: 1 Class of 100 Students (5-Minute Attendance Window)
-1. **Writes**:
-   - 1 Session document write: `1 write`.
-   - 100 student check-in writes to `sessions/{id}/attendance/{studentUid}`: `100 writes`.
-   - Total writes per session = **101 writes**.
-2. **Reads**:
-   - Faculty phone opens live listener on `sessions/{id}/attendance`:
-     - Initial query on empty collection: `0 reads`.
-     - Real-time updates: Firestore charges **1 read per newly arrived document** streamed to the snapshot listener. For 100 students: `100 reads`.
-   - 100 student phones listening strictly to their own attendance receipt (`sessions/{id}/attendance/{theirUid}`): `100 reads`.
-   - Total reads per session = **200 reads**.
+#### Baseline vs. $3\times$ Safety Margin Analysis
+Real mobile clients experience Wi-Fi/cellular drops, backgrounding/resume events, and faculty UI tab switches that re-establish snapshot listeners. We apply a **$3\times$ safety multiplier** to all baseline read/write expectations:
 
-#### Daily & Weekly Quota Projection (Realistic University Schedule)
+| Cohort Activity | Baseline Daily Reads | $3\times$ Safety Reads | % of 50k Quota | Baseline Daily Writes | $3\times$ Safety Writes | % of 20k Quota |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **1 Class (100 students)** | 200 | **600** | 1.2% | 101 | **303** | 1.5% |
+| **3 Classes / Day (Pilot Cohort)** | 600 | **1,800** | 3.6% | 303 | **909** | 4.5% |
+| **10 Classes / Day (300 students each)** | 6,000 | **18,000** | 36.0% | 3,030 | **9,090** | 45.4% |
 
-| Cohort Activity | Daily Writes | % of 20k Write Quota | Daily Reads | % of 50k Read Quota |
-| :--- | :---: | :---: | :---: | :---: |
-| **1 Class (100 students)** | 101 | 0.5% | 200 | 0.4% |
-| **3 Classes / Day (Pilot Cohort)** | 303 | 1.5% | 600 | 1.2% |
-| **10 Classes / Day (300 students each)** | 3,030 | 15.1% | 6,000 | 12.0% |
-| **Peak 5-Day Academic Week (50 sessions)** | 15,150 / wk | Safe | 30,000 / wk | Safe |
-
-> [!NOTE]
-> **When Would Firestore Spark Quota Be Exceeded?**
-> The quota would only be breached if:
-> 1. Students listen to the *entire* collection (`sessions/{id}/attendance`) instead of their individual document, multiplying reads by $N^2$ (blocked by Firestore security rules).
-> 2. More than **150 lecture sessions of 100 students each** are conducted in a single 24-hour day.
-> 3. Unindexed client queries scan past historical sessions (historical queries are routed strictly to Postgres via the backend API).
+#### Quota Alerting & Circuit Breakers:
+1. **50% Daily Quota Alert**: Google Cloud Console / Firebase budget alerts configured at **10,000 writes** and **25,000 reads** to trigger automated warning emails before approaching platform limits.
+2. **Circuit Breaker**: If reads exceed 75% of daily quota, the mobile client falls back to manual pull-to-refresh rather than continuous live snapshot streaming.
 
 ---
 
 ## 4. Cold-Start Analysis & Keep-Warm Strategy
 
-### 4.1. The Cold-Start Risk
-- **Render Free Tier Web Service**: Auto-suspends after 15 minutes of HTTP inactivity. A cold container startup requires **30 to 50 seconds** to initialize the Python runtime and load FastAPI.
-- **Supabase Free Tier Postgres**: Pauses after 7 days of total inactivity, resuming in **1 to 3 seconds** upon incoming query.
-- **Problem**: If 300 students arrive at class and attempt check-in while the server is asleep, initial requests will encounter high latency or HTTP 504 gateway timeouts.
+### 4.1. Cold-Start Characterization
+- **Render Free Tier Web Service**: Auto-suspends after 15 minutes of HTTP inactivity. Cold container startup requires **30 to 50 seconds** to boot Linux, start Uvicorn, and initialize the application.
+- **Supabase Free Tier Postgres**: Pauses compute after 7 days without queries. Resumes in **1 to 3 seconds**.
 
-### 4.2. Keep-Warm Mitigation Strategy
-1. **Faculty Pre-Warm Ping**:
-   - The faculty app automatically fires an asynchronous `GET /api/v1/health` ping as soon as the faculty member opens the course screen (typically 5 to 10 minutes before initiating the lecture check-in window).
-2. **Scheduled Campus-Hours Cron Pinger**:
-   - A free scheduled GitHub Actions cron workflow (or free external uptime ping like Cron-job.org / UptimeRobot) issues a lightweight `HEAD /api/v1/health` ping every 12 minutes during academic hours (Monday–Friday, 8:00 AM – 5:00 PM IST).
-   - Keeps the container active during class transitions with zero cost.
-3. **Client-Side Exponential Backoff**:
-   - Mobile check-in requests implement exponential retry (retry at 2s, 4s, 8s with jitter) and display a clear *"Connecting to classroom server..."* progress indicator.
+### 4.2. Keep-Warm Mitigations
+1. **Health Endpoint with Database Ping**:
+   - `GET /api/v1/health` is explicitly defined to execute a trivial `SELECT 1` query via SQLAlchemy against Supabase.
+   - Pinging `/health` simultaneously wakes the Render Python container AND resets Supabase's 7-day inactivity pause counter.
+2. **Faculty Pre-Warm Ping**:
+   - The faculty app fires an asynchronous `GET /api/v1/health` ping when the faculty member opens the course screen (5–10 minutes before attendance).
+3. **Campus-Hours Scheduled Cron Ping**:
+   - A free scheduled GitHub Actions cron workflow (or external monitor like Cron-job.org / UptimeRobot) issues a lightweight `HEAD /api/v1/health` ping every 12 minutes during academic hours (Monday–Friday, 8:00 AM – 5:00 PM IST).
 
-### 4.3. Pass/Fail Load Test Criterion
-- **Benchmark**: Locally executed Locust test simulating **300 concurrent student check-ins submitted within 60 seconds** against a cold-started staging instance.
+### 4.3. Split Pass/Fail Load Testing Suite
+To objectively validate real-world performance, the load testing suite (Locust) is split into two distinct benchmarks:
+
+#### Benchmark A: Pre-Warmed State (Standard In-Class Flow)
+- **Condition**: Staging instance is active/warm.
+- **Load**: 300 concurrent student check-ins submitted across a 60-second window.
 - **Pass Criteria**:
-  - **0% HTTP 5xx errors** (all requests successfully complete or retry cleanly).
-  - **P95 Latency < 5.0 seconds** across the entire 60-second window.
+  - **P95 Latency < 5.0 seconds**.
+  - **0% HTTP 5xx errors**.
+
+#### Benchmark B: Unmitigated Cold State (Worst-Case Failover)
+- **Condition**: Staging container is completely idle/asleep (0 instances running).
+- **Load**: 300 check-ins submitted immediately upon session start.
+- **Pass Criteria**:
+  - Record worst-case wake-up duration (target: container online in <50s).
+  - Verify client retry UX: app displays clear *"Connecting to classroom server..."* state with exponential retry backoff (2s, 4s, 8s).
+  - **Zero dropped check-ins** (all 300 check-ins eventually succeed once the server boots).
 
 ---
 
-## 5. Dropping GPS Geofencing (Radio-Only Proximity Architecture)
+## 5. Android Radio Architecture & `minSdkVersion` Trade-Off
 
-### 5.1. Architectural Justification
-1. **GPS Limitations Indoors**: Classroom lectures occur inside multi-story concrete academic buildings where satellite GPS signals suffer 15–30 meter multi-path drift, frequent signal loss, or complete failure.
-2. **Android 12+ Permission Privacy**: Under Android 12 (API 31+), declaring `BLUETOOTH_SCAN` with the `neverForLocation` flag allows BLE proximity scanning **without requesting or accessing the user's GPS location**.
-3. **Radio Envelope Superiority**: BLE RF signal attenuation follows the physical inverse-square law. A calibrated median RSSI threshold (e.g., $-75\text{ dBm}$) combined with a rotating in-room challenge nonce bounds presence to the physical room envelope (~5–8 meters) with significantly higher fidelity than GPS.
-4. **Conclusion**: GPS geofencing and mock-location detection are **completely removed**. The platform relies 100% on **cryptographic nonce reception + BLE RSSI radio boundaries**.
+### 5.1. The Android Location Permission Reality
+- **Android 12+ (API 31+)**: Declaring `BLUETOOTH_SCAN` with `android:usesPermissionFlags="neverForLocation"` allows Bluetooth scanning **without requesting or accessing device GPS location**.
+- **Android 8 to 11 (API 26 to API 30)**: The underlying Android OS radio architecture treats BLE beacon scanning as potentially revealing user location. On these versions, the OS strictly mandates `ACCESS_FINE_LOCATION` and device Location Services turned ON to return BLE scan results.
+
+### 5.2. `minSdkVersion` Architectural Decision
+- **Option 1: Set `minSdkVersion 31` (Android 12+)**:
+  - *Advantage*: Completely purges the word "Location" from the app manifest and code. Absolute zero-location privacy guarantee.
+  - *Disadvantage*: Drops support for ~15–20% of student devices (budget Android 8–11 devices commonly used across university cohorts).
+- **Option 2: Retain `minSdkVersion 26` with Conditional Manifest Permissions (RECOMMENDED)**:
+  - *Implementation*:
+    ```xml
+    <!-- For Android 11 and below only -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    
+    <!-- For Android 12 and above -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+                     android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    ```
+  - *In-App Transparency*: Android 8–11 users are shown an explicit dialog: *"Android requires location permissions to discover nearby Bluetooth devices. Your location is never tracked, stored, or transmitted."*
+  - *Result*: 100% student cohort coverage without penalizing older hardware.
 
 ---
 
@@ -366,26 +379,27 @@ flowchart TD
   - *Advantage*: Bypasses the iOS peripheral advertising payload limitation, since iOS acts as a central scanner (which has full payload read access).
 - **Option C (Hybrid)**: Option B provides the authoritative cryptographic proof submitted to the API, while Option A is used for optional near-field visual discovery on the faculty device screen.
 
-### 6.2. Spike Test Suite & Pass/Fail Criteria
-Tests executed on **at least 2 Android devices (different OEMs)** and **at least 1 iPhone**:
-1. **Advertising Reliability**: Advertisement success rate when broadcasting 50 packets. (Pass: >95% reception).
-2. **Scan Discovery Latency**: Time to discover peripheral from a cold scan. (Pass: <3.0 seconds).
-3. **RSSI Stability & Wall Attenuation**: Measured RSSI at 1m, 3m, 5m, 10m, and outside a closed classroom door. (Pass: distinguishable signal drop of **>15 dB** through classroom door/wall).
-4. **Foreground Battery Drain**: Battery consumption during a continuous 10-minute check-in session. (Pass: <1.5% battery drain).
-5. **Cross-Platform Interoperability**: Android central scanning iOS peripheral, and iOS central scanning Android peripheral.
+### 6.2. Spike Test Suite & Hardware Availability Constraint
+- **Physical Test Suite**: Evaluated on **at least 2 Android devices (different OEMs: e.g. Samsung, Xiaomi/OnePlus)** and **1 iPhone (if available)**.
+- **Pass/Fail Criteria**:
+  1. *Advertising Reliability*: Success rate >95% across 50 packets.
+  2. *Scan Discovery Latency*: Time to discovery <3.0 seconds.
+  3. *RSSI Stability & Wall Attenuation*: Distinguishable signal drop of **>15 dB** through closed classroom door/wall.
+  4. *Foreground Battery Drain*: <1.5% battery drain over a 10-minute check-in session.
+- **iOS Hardware Caveat**: If no physical iPhone is available for the spike, the iOS portion of the spike will be explicitly marked as **Unverified in Hardware**. iOS constraints will be documented from official Apple CoreBluetooth specifications and verified when iOS hardware is secured.
 
 ---
 
 ## 7. AI Assistant Scope & Data Privacy Compliance (Phase 5)
 
 ### 7.1. Privacy Mandate for Unpaid LLM Tiers
-Official Google AI Studio terms state:
-> *"To help with quality and improve our products, human reviewers may read, annotate, and process your API input and output... Content submitted to unpaid services may be used to develop and improve Google products."*
+Official Google AI Studio terms state that unpaid API prompts and responses may be read by human reviewers and used to improve Google products.
 
 ### 7.2. Enforced Architectural Boundary
 1. **Zero Student PII to LLM**: Student names, roll numbers, attendance records, session IDs, or personal records **MUST NEVER** be passed to any free-tier LLM API.
 2. **Deterministic Server-Side Tool Execution**: All student attendance queries (e.g. *"What is my attendance percentage in CSE312?"*) are executed **deterministically in FastAPI using parameterized SQL queries** directly against PostgreSQL. The formatted result is returned to the student client without LLM involvement.
-3. **LLM Scope Strictly Limited to Public Policies**: The Gemini API (`gemini-2.5-flash` / `gemini-1.5-flash-8b`) is utilized **exclusively for public policy document retrieval** (e.g., institutional attendance regulations, 75% mandatory criteria, medical leave submission processes).
+3. **LLM Scope Strictly Limited to Public Policies**: The Gemini API (configured via `GEMINI_MODEL` environment variable) is utilized **exclusively for public policy document retrieval** (institutional attendance regulations, 75% mandatory criteria, medical leave submission processes).
+4. **Phase 5 Model Re-verification**: At the start of Phase 5, active Gemini model identifiers and free-tier terms will be verified from official Google developer documentation before coding.
 
 ---
 
@@ -393,7 +407,7 @@ Official Google AI Studio terms state:
 
 ### 8.1. Android Distribution (Zero Cost)
 - **Play Store $25 Account Status**: No Google Play Developer account exists currently ($0 budget).
-- **Official Closed-Testing Rule Verification**: Google officially mandates that personal developer accounts created after November 13, 2023 must run a **closed test with at least 12 testers opted in continuously for at least 14 days** before applying for production access ([Google Play Help: Closed Testing Requirements](https://support.google.com/googleplay/android-developer/answer/14151465)).
+- **Official Closed-Testing Rule**: Google mandates that personal developer accounts created after November 13, 2023 must run a **closed test with at least 12 testers opted in continuously for at least 14 days** before applying for production access ([Google Play Help: Closed Testing Requirements](https://support.google.com/googleplay/android-developer/answer/14151465)).
 - **$0 Distribution Path**:
   1. **Firebase App Distribution**: Direct delivery to student and faculty tester groups via email invites, featuring in-app update prompts (100% free on Firebase Spark).
   2. **Direct APK Releases**: Signed APK binaries published via GitHub Releases with SHA-256 checksums.
@@ -404,17 +418,23 @@ Official Google AI Studio terms state:
 
 ---
 
-## 9. Remote Branch Disposition & Git History Analysis
+## 9. Historical Vulnerability Audit & Remote Branch Disposition
 
-### 9.1. Analysis of Historical Commit `73f8f97`
-Commit `73f8f97` (*"Fix(Security): violently restore pending_verification since user demonstrated console mastery"*) reversed an earlier bypass (`135c35a: Fix(UX): totally bypass admin gate out of necessity so students aren't blocked`). 
-- **What it changed**: Commit `135c35a` had hardcoded `status: 'verified'` in `register_screen.dart` and `firestore.rules`, allowing any newly registered user to bypass admin approval. Commit `73f8f97` restored security by forcing new registrations to `status: 'pending_verification'`, re-establishing the requirement for admin review.
+### 9.1. Existing User Audit for Commit `135c35a` Bypass
+- **The Historical Vulnerability**: Commit `135c35a` temporarily hardcoded `status: 'verified'` during registration, and commit `73f8f97` only reversed it going forward.
+- **Audit Tooling**: Created [`scripts/audit_existing_users.py`](file:///C:/Users/PRIYANRAJ%20J/.gemini/antigravity/scratch/attendance-ble-platform/scripts/audit_existing_users.py) (read-only) to query Firestore `users/` and identify any accounts where:
+  ```python
+  status == 'verified' and (verifiedBy is None or approvedBy is None) and role != 'admin'
+  ```
+- **Operational Rule**: The script is strictly **read-only**. It outputs a proposed reset list (`RESET_TO_PENDING_VERIFICATION`). **No production data will be modified without explicit user authorization.**
 
-### 9.2. Remote Branch Status & Action Plan
-- **`origin/phase-1-auth`**: Historical proof-of-concept branch. Fully merged into `origin/main` in commit `4ebbe91`.
-- **`origin/phase-2-onwards`**: Historical feature branch. Fully merged into `origin/main` in commit `82d83ee`.
-- **`origin/phase-7-security-fixes`**: Historical security patches. Fully merged into `origin/main` (`git log origin/main..origin/phase-7-security-fixes` is empty).
-- **Recommendation**: All three branches are fully merged ancestors of `main`. They should be kept as read-only historical tags or deleted from remote during final release tidying.
+### 9.2. Remote Branch Archival
+- Remote branches (`phase-1-auth`, `phase-2-onwards`, `phase-7-security-fixes`) are fully merged ancestors of `main`.
+- **Action Taken**: Preserved as annotated git tags:
+  - `archive/phase-1-auth`
+  - `archive/phase-2-onwards`
+  - `archive/phase-7-security-fixes`
+- Remote branches will **not** be deleted without explicit confirmation.
 
 ---
 
@@ -427,7 +447,7 @@ Estimated effort for a solo developer factoring in academic schedules, device de
 | **Phase 1** | **BLE Hardware Spike** | Master Plan approved | Measured reliability table on Android + iOS physical devices; ADR choosing Option A, B, or C | Spike test harness, field-test logs in `docs/ble-field-tests/`, ADR-0005 | **4 – 6 days** |
 | **Phase 2** | **Core Mobile & Biometric Client** | Phase 1 ADR approved | Mobile app with biometric-gated Keystore signing, RSSI envelope calibration, zero soft-fails | Updated Flutter screens, Keystore/Secure Enclave service, widget tests | **5 – 8 days** |
 | **Phase 3** | **$0 Backend & PostgreSQL** | Phase 2 completed | FastAPI backend on Render free tier, Supabase Postgres migrations, full negative security test suite | Dockerized FastAPI app, Alembic migrations, OpenAPI spec, Testcontainer tests | **5 – 8 days** |
-| **Phase 4** | **Free Cloud Pipeline & Deployment** | Phase 3 tests green | Staging deployment live on Render, GitHub Actions CI/CD green, 300-in-60s cold load test passing | Cloud deployment, CI/CD workflows, Locust load test scripts | **4 – 6 days** |
+| **Phase 4** | **Free Cloud Pipeline & Deployment** | Phase 3 tests green | Staging deployment live on Render, GitHub Actions CI/CD green, split load test passing | Cloud deployment, CI/CD workflows, Locust load test scripts | **4 – 6 days** |
 | **Phase 5** | **AI Policy Assistant (Free Tier)** | Phase 4 stable | Policy RAG with `pgvector` using Gemini API free tier (public handbook only), 30-prompt eval suite passing | RAG pipeline, deterministic query tools, AI evaluation runner | **4 – 5 days** |
 | **Phase 6** | **Polish, Accessibility & DPDP Review** | Phase 5 passed | WCAG 2.1 AA accessibility pass, DPDP Act consent and deletion flow verified | In-app account deletion, localization strings, privacy documentation | **3 – 4 days** |
 | **Phase 7** | **Android Pilot & Distribution** | Phase 6 completed | Successful live classroom pilot with 1 faculty and enrolled student cohort | Production APK release, pilot accuracy report, Firebase distribution | **3 – 5 days** |
