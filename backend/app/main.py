@@ -45,7 +45,7 @@ async def root():
         "title": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "status": "healthy",
-        "mobile_simulator": "/app",
+        "mobile_simulator": "/app/",
         "api_docs": f"{settings.API_V1_STR}/docs",
         "health": f"{settings.API_V1_STR}/health",
     }
