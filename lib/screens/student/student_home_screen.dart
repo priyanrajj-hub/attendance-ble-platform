@@ -5,6 +5,7 @@ import '../../models/user_role.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/proximity_provider.dart';
 import '../../services/biometric_service.dart';
+import '../../widgets/persona_switcher_sheet.dart';
 
 class StudentHomeScreen extends ConsumerStatefulWidget {
   const StudentHomeScreen({super.key});
@@ -92,6 +93,11 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
       appBar: AppBar(
         title: const Text('Student Portal'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.swap_horizontal_circle_outlined),
+            tooltip: 'Switch Persona',
+            onPressed: () => showPersonaSwitcherModal(context, ref),
+          ),
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: 'Attendance History',

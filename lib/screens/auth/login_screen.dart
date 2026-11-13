@@ -179,6 +179,89 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 24),
+                    const Divider(),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F4FF),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFC5CAE9)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(Icons.bolt, color: Color(0xFF283593)),
+                              SizedBox(width: 8),
+                              Text(
+                                'Instant Demo & Field Verification',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF283593),
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'One-tap test access for physical phone evaluation without email/password barriers:',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                          ),
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.school, size: 18),
+                            label: const Text('Launch Student Mode (PriyanRaj J)'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF3949AB),
+                              foregroundColor: Colors.white,
+                              elevation: 1,
+                              padding: const EdgeInsets.symmetric(vertical: 11),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () {
+                              ref.read(demoProfileProvider.notifier).state = DemoPersonas.student;
+                              context.go('/student');
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.sensors, size: 18),
+                            label: const Text('Launch Faculty Mode (Dr. Rajesh)'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00796B),
+                              foregroundColor: Colors.white,
+                              elevation: 1,
+                              padding: const EdgeInsets.symmetric(vertical: 11),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () {
+                              ref.read(demoProfileProvider.notifier).state = DemoPersonas.faculty;
+                              context.go('/faculty');
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.verified_user, size: 18),
+                            label: const Text('Launch Admin Mode (Chief Admin)'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE65100),
+                              foregroundColor: Colors.white,
+                              elevation: 1,
+                              padding: const EdgeInsets.symmetric(vertical: 11),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () {
+                              ref.read(demoProfileProvider.notifier).state = DemoPersonas.admin;
+                              context.go('/admin');
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),

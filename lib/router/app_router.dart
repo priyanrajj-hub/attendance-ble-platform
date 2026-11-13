@@ -16,14 +16,32 @@ import '../screens/faculty/faculty_session_screen.dart';
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateChangesProvider);
   final profileState = ref.watch(userProfileProvider);
+  final demoProfile = ref.watch(demoProfileProvider);
 
   return GoRouter(
     initialLocation: '/login',
     debugLogDiagnostics: false,
     redirect: (BuildContext context, GoRouterState state) {
+      final loc = state.matchedLocation;
+
+      // 0. Demo Persona Override for instant field testing
+      if (demoProfile != null) {
+        switch (demoProfile.role) {
+          case UserRole.student:
+            if (!loc.startsWith('/student')) return '/student';
+            return null;
+          case UserRole.faculty:
+            if (!loc.startsWith('/faculty')) return '/faculty';
+            return null;
+          case UserRole.admin:
+            if (!loc.startsWith('/admin')) return '/admin';
+            return null;
+        }
+      }
+
       final user = authState.value;
       final profile = profileState.value;
-      final isAuthRoute = state.matchedLocation == '/login' || state.matchedLocation == '/register';
+      final isAuthRoute = loc == '/login' || loc == '/register';
 
       // 1. Unauthenticated users can only visit login or register
       if (user == null) {
@@ -32,11 +50,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // 2. Email verification gate
       if (!user.emailVerified) {
-        return state.matchedLocation == '/verify-email' ? null : '/verify-email';
+        return loc == '/verify-email' ? null : '/verify-email';
       }
 
       // If user is authenticated and verified, redirect away from auth routes
-      if (isAuthRoute || state.matchedLocation == '/verify-email') {
+      if (isAuthRoute || loc == '/verify-email') {
         if (profile == null || !profile.isVerified) {
           return '/pending-approval';
         }
@@ -52,12 +70,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // 3. Admin approval gate
       if (profile != null && !profile.isVerified) {
-        return state.matchedLocation == '/pending-approval' ? null : '/pending-approval';
+        return loc == '/pending-approval' ? null : '/pending-approval';
       }
 
       // 4. Role-based routing guards
       if (profile != null && profile.isVerified) {
-        final loc = state.matchedLocation;
         if (profile.role == UserRole.student && (loc.startsWith('/faculty') || loc.startsWith('/admin'))) {
           return '/student';
         }
@@ -109,8 +126,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'session/:courseId',
             builder: (context, state) {
-              final courseId = state.pathParameters['courseId'] ?? '';
-              final courseName = state.uri.queryParameters['name'] ?? 'Class Session';
+              final courseId = state.pathParameters['courseId'] ?? 'CSE450';
+              final courseName = state.uri.queryParameters['name'] ?? 'Mobile Computing (CSE450)';
               return FacultySessionScreen(courseId: courseId, courseName: courseName);
             },
           ),

@@ -59,6 +59,10 @@ class RateLimiterAntiDDoSMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
+        # Static assets, simulator, and binary downloads are exempt from API rate limiting
+        if request.url.path.startswith("/download") or request.url.path.startswith("/app"):
+            return await call_next(request)
+
         # Extract client IP (handling reverse proxies safely)
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:

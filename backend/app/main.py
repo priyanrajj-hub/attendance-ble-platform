@@ -82,7 +82,7 @@ apk_path = os.path.abspath(
 )
 
 
-@app.get("/download/app.apk", summary="Download compiled Android APK binary")
+@app.api_route("/download/app.apk", methods=["GET", "HEAD"], summary="Download compiled Android APK binary")
 async def download_apk():
     """Streams the signed production Android APK directly to mobile or desktop browsers."""
     if os.path.exists(apk_path):
@@ -90,6 +90,11 @@ async def download_apk():
             path=apk_path,
             filename="AmritaAttendance-prod-debug.apk",
             media_type="application/vnd.android.package-archive",
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Disposition": 'attachment; filename="AmritaAttendance-prod-debug.apk"',
+                "Cache-Control": "public, max-age=3600",
+            },
         )
     return {"error": "APK not found. Please compile the app first."}
 

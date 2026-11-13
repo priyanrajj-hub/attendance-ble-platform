@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user_role.dart';
+import '../services/default_proximity_service.dart';
 
 enum ProximityStatus {
   idle,
@@ -69,7 +70,6 @@ class CheckInPayload {
 }
 
 /// Abstract contract for BLE hardware proximity detection.
-/// Isolates the UI screens from whether Option A, B, or C is selected in ADR-0005.
 abstract class ProximityProvider {
   Stream<ProximityState> get stateStream;
   ProximityState get currentState;
@@ -80,11 +80,9 @@ abstract class ProximityProvider {
 }
 
 /// Global Riverpod provider for ProximityProvider.
-/// By default, throws UnimplementedError until bound by a concrete implementation
-/// (e.g. real BLE service in prod or test double in widget test overrides).
-/// Mock implementations are strictly excluded from production compilation.
+/// Uses DefaultProximityService for hardware BLE operations and RF simulation.
 final proximityProvider = Provider<ProximityProvider>((ref) {
-  throw UnimplementedError(
-    'ProximityProvider has not been initialized. It must be provided via Riverpod override.',
-  );
+  final service = DefaultProximityService();
+  ref.onDispose(() => service.dispose());
+  return service;
 });

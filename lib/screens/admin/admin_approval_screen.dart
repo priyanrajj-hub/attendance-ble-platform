@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/admin_approval_repository.dart';
+import '../../widgets/persona_switcher_sheet.dart';
 
 class AdminApprovalScreen extends ConsumerStatefulWidget {
   const AdminApprovalScreen({super.key});
@@ -48,6 +49,11 @@ class _AdminApprovalScreenState extends ConsumerState<AdminApprovalScreen> {
       appBar: AppBar(
         title: const Text('Admin Verification Portal'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.swap_horizontal_circle_outlined),
+            tooltip: 'Switch Persona',
+            onPressed: () => showPersonaSwitcherModal(context, ref),
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sign Out',
