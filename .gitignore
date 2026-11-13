@@ -1,3 +1,4 @@
+# === Repository Exclusions & Environment Vault Security ===
 # === Flutter / Dart ===
 .dart_tool/
 .packages

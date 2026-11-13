@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     HUGGINGFACE_API_URL: str = "https://api-inference.huggingface.co/models/priyanrajj/attendanceagent"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "env/.env", "../env/.env"),
         env_file_encoding="utf-8",
         extra="ignore"
     )
