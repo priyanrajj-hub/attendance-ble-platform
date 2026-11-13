@@ -58,7 +58,7 @@ class BiometricService {
   /// Core biometric prompt method.
   Future<BiometricResult> authenticate({
     required String reason,
-    bool biometricOnly = true,
+    bool biometricOnly = false,
   }) async {
     try {
       final supported = await isBiometricSupported();

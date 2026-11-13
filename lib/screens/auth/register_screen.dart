@@ -191,6 +191,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           return 'Email is required';
                         }
                         final email = value.trim().toLowerCase();
+                        if (email.endsWith('@gmail.com') ||
+                            email.endsWith('@yahoo.com') ||
+                            email.endsWith('@outlook.com') ||
+                            email.endsWith('@hotmail.com')) {
+                          return 'Personal accounts (@gmail.com) are strictly blocked by university security policy. Please use ${_selectedRole.expectedDomain}';
+                        }
                         if (!email.endsWith(_selectedRole.expectedDomain)) {
                           return 'Must end with ${_selectedRole.expectedDomain}';
                         }

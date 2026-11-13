@@ -118,6 +118,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           return 'Please enter your institutional email';
                         }
                         final email = value.trim().toLowerCase();
+                        if (email.endsWith('@gmail.com') ||
+                            email.endsWith('@yahoo.com') ||
+                            email.endsWith('@outlook.com') ||
+                            email.endsWith('@hotmail.com')) {
+                          return 'Personal Gmail/commercial accounts are blocked. Use your official Amrita address (@ch.students.amrita.edu or @ch.amrita.edu).';
+                        }
                         if (!email.endsWith('@ch.students.amrita.edu') &&
                             !email.endsWith('@ch.amrita.edu')) {
                           return 'Must end with @ch.students.amrita.edu or @ch.amrita.edu';

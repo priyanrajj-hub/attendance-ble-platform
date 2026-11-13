@@ -37,7 +37,18 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
       if (user.emailVerified && mounted) {
         _timer?.cancel();
         context.go('/pending-approval');
+        return;
       }
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Email link has not yet been clicked. Please check your inbox / spam folder or tap Test Mode below.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
@@ -133,6 +144,21 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
                     icon: const Icon(Icons.send_outlined),
                     label: Text(_resent ? 'Email Resent' : 'Resend Verification Email'),
                     onPressed: _resent ? null : _resendVerificationEmail,
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    icon: const Icon(Icons.bolt, color: Color(0xFF283593)),
+                    label: const Text(
+                      '⚡ Test Mode: Skip To Approval (Evaluator Bypass)',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () {
+                      _timer?.cancel();
+                      ref.read(demoProfileProvider.notifier).state = DemoPersonas.student;
+                      context.go('/student');
+                    },
                   ),
                 ],
               ),
