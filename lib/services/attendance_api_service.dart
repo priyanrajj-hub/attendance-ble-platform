@@ -358,6 +358,41 @@ class AttendanceApiService {
     return null;
   }
 
+  Future<Map<String, dynamic>?> getAttendanceSummary({
+    double? minAttendancePct,
+    double? condonationMinPct,
+    String? studentId,
+  }) async {
+    final token = await _auth.currentUser?.getIdToken();
+    final queryParams = <String, String>{};
+    if (minAttendancePct != null) {
+      queryParams['min_attendance_pct'] = minAttendancePct.toString();
+    }
+    if (condonationMinPct != null) {
+      queryParams['condonation_min_pct'] = condonationMinPct.toString();
+    }
+    if (studentId != null) {
+      queryParams['student_id'] = studentId;
+    }
+
+    final uri = Uri.parse('$_baseUrl/api/v1/attendance/summary').replace(
+      queryParameters: queryParams.isNotEmpty ? queryParams : null,
+    );
+
+    try {
+      final request = await _client.getUrl(uri);
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      final responseBody = await response.transform(utf8.decoder).join();
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(responseBody) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<bool> submitDispute({
     required String sessionId,
     required String reason,

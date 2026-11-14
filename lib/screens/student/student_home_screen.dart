@@ -19,6 +19,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
   List<Map<String, dynamic>> _courses = [];
   List<Map<String, dynamic>> _history = [];
   List<Map<String, dynamic>> _disputes = [];
+  Map<String, dynamic>? _attendanceSummary;
   bool _isLoading = true;
   String? _loadError;
 
@@ -40,13 +41,15 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
         api.getCourses(),
         api.getMyAttendanceHistory(),
         api.getDisputes(),
+        api.getAttendanceSummary(),
       ]);
 
       if (mounted) {
         setState(() {
-          _courses = results[0];
-          _history = results[1];
-          _disputes = results[2];
+          _courses = results[0] as List<Map<String, dynamic>>;
+          _history = results[1] as List<Map<String, dynamic>>;
+          _disputes = results[2] as List<Map<String, dynamic>>;
+          _attendanceSummary = results[3] as Map<String, dynamic>?;
           _isLoading = false;
         });
       }
@@ -135,30 +138,52 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // Attendance Calculations
-    final attendedCount = _history.where((r) => r['status'] == 'present' || r['status'] == 'present_override').length;
-    final totalConducted = _history.isEmpty ? 1 : _history.length;
-    final double attendancePct = (attendedCount / totalConducted) * 100.0;
-
+    // Authoritative Attendance Calculations directly from PostgreSQL
+    int attendedCount = 0;
+    int totalConducted = 0;
+    double attendancePct = 100.0;
     int safeSkips = 0;
     int classesNeeded = 0;
-    String complianceStatus = 'Good Standing';
+    String complianceStatus = 'Eligible (>= 75%)';
     Color complianceColor = Colors.green;
 
-    if (attendancePct >= 75.0) {
-      safeSkips = ((attendedCount - 0.75 * totalConducted) / 0.75).floor();
-      if (safeSkips < 0) safeSkips = 0;
-      complianceStatus = 'Eligible (>= 75%)';
-      complianceColor = Colors.green;
-    } else {
-      classesNeeded = ((0.75 * totalConducted - attendedCount) / 0.25).ceil();
-      if (classesNeeded < 0) classesNeeded = 0;
-      if (attendancePct >= 65.0) {
-        complianceStatus = 'Condonable (65-74%)';
+    if (_attendanceSummary != null && _attendanceSummary!['overall'] is Map) {
+      final overall = _attendanceSummary!['overall'] as Map<String, dynamic>;
+      attendedCount = (overall['total_attended'] as num?)?.toInt() ?? 0;
+      totalConducted = (overall['total_conducted'] as num?)?.toInt() ?? 0;
+      attendancePct = (overall['attendance_pct'] as num?)?.toDouble() ?? 100.0;
+      safeSkips = (overall['safe_skips_remaining'] as num?)?.toInt() ?? 0;
+      classesNeeded = (overall['classes_needed_for_min'] as num?)?.toInt() ?? 0;
+      complianceStatus = overall['status'] as String? ?? 'Eligible';
+
+      if (attendancePct >= 75.0) {
+        complianceColor = Colors.green;
+      } else if (attendancePct >= 65.0) {
         complianceColor = Colors.amber.shade800;
       } else {
-        complianceStatus = 'Critical Shortage (FA Risk)';
         complianceColor = Colors.red;
+      }
+    } else {
+      attendedCount = _history.where((r) => r['status'] == 'present' || r['status'] == 'present_override').length;
+      totalConducted = _history.length;
+      if (totalConducted > 0) {
+        attendancePct = (attendedCount / totalConducted) * 100.0;
+        if (attendancePct >= 75.0) {
+          safeSkips = ((attendedCount - 0.75 * totalConducted) / 0.75).floor();
+          if (safeSkips < 0) safeSkips = 0;
+          complianceStatus = 'Eligible (>= 75%)';
+          complianceColor = Colors.green;
+        } else {
+          classesNeeded = ((0.75 * totalConducted - attendedCount) / 0.25).ceil();
+          if (classesNeeded < 0) classesNeeded = 0;
+          if (attendancePct >= 65.0) {
+            complianceStatus = 'Condonable (65-74%)';
+            complianceColor = Colors.amber.shade800;
+          } else {
+            complianceStatus = 'Critical Shortage (FA Risk)';
+            complianceColor = Colors.red;
+          }
+        }
       }
     }
 
@@ -504,6 +529,58 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                                 'Instructor: $facultyName',
                                 style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                               ),
+                              if (_attendanceSummary != null && _attendanceSummary!['courses'] is List) ...[
+                                Builder(
+                                  builder: (context) {
+                                    final list = _attendanceSummary!['courses'] as List;
+                                    final stat = list.cast<Map<String, dynamic>>().firstWhere(
+                                      (c) => c['course_id'] == courseId || c['course_code'] == courseCode,
+                                      orElse: () => <String, dynamic>{},
+                                    );
+                                    if (stat.isEmpty) return const SizedBox.shrink();
+                                    final cPct = (stat['attendance_pct'] as num?)?.toDouble() ?? 100.0;
+                                    final cCond = (stat['conducted_sessions'] as num?)?.toInt() ?? 0;
+                                    final cAtt = (stat['attended_sessions'] as num?)?.toInt() ?? 0;
+                                    final cSkips = (stat['safe_skips_remaining'] as num?)?.toInt() ?? 0;
+                                    final cNeed = (stat['classes_needed_for_min'] as num?)?.toInt() ?? 0;
+
+                                    final chipColor = cPct >= 75.0
+                                        ? Colors.green.shade700
+                                        : (cPct >= 65.0 ? Colors.amber.shade800 : Colors.red.shade700);
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(top: 8),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.grey.shade200),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'Attendance: ${cPct.toStringAsFixed(1)}% ($cAtt / $cCond)',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                              color: chipColor,
+                                            ),
+                                          ),
+                                          Text(
+                                            cPct >= 75.0 ? '$cSkips skips safe' : '$cNeed needed',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.grey.shade700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                               if (hasActiveSession) ...[
                                 const SizedBox(height: 14),
                                 ElevatedButton.icon(

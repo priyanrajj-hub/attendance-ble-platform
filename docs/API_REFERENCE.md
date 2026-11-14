@@ -36,12 +36,55 @@ Verifies proximity and records attendance for the authenticated student.
   }
   ```
 
+### `GET /api/v1/attendance/summary`
+Calculates authoritative attendance metrics directly from PostgreSQL sessions (`status != 'cancelled'`) and attendance records.
+- **Role**: `student` (scoped to authenticated user), `faculty`, `admin` (supports `student_id` parameter).
+- **Query Parameters**:
+  - `min_attendance_pct`: (default: 75.0) Minimum institutional attendance percentage threshold.
+  - `condonation_min_pct`: (default: 65.0) Minimum condonation threshold percentage.
+  - `student_id`: Optional target student UUID or roll number (Faculty/Admin only).
+- **Response**: `200 OK`
+  ```json
+  {
+    "student_id": "22222222-2222-2222-2222-222222222222",
+    "institutional_policy": {
+      "min_attendance_pct": 75.0,
+      "condonation_min_pct": 65.0
+    },
+    "overall": {
+      "total_conducted": 25,
+      "total_attended": 21,
+      "total_missed": 4,
+      "attendance_pct": 84.0,
+      "safe_skips_remaining": 3,
+      "classes_needed_for_min": 0,
+      "status": "Eligible"
+    },
+    "courses": [
+      {
+        "course_id": "c1111111-1111-1111-1111-111111111111",
+        "course_code": "CSE-401",
+        "course_name": "Distributed Systems",
+        "term": "Fall 2026",
+        "conducted_sessions": 10,
+        "attended_sessions": 8,
+        "missed_sessions": 2,
+        "attendance_pct": 80.0,
+        "safe_skips_remaining": 0,
+        "classes_needed_for_min": 0,
+        "status": "Eligible"
+      }
+    ]
+  }
+  ```
+
 ---
 
 ## 2. Session Management
 
 ### `POST /api/v1/sessions/start`
 Starts a new BLE attendance session. Only accessible to course-assigned faculty or admins.
+Generates an ephemeral 256-bit rotation secret and encrypts it at rest in PostgreSQL using AES-256-GCM envelope encryption.
 - **Request Body**:
   ```json
   {
@@ -52,6 +95,12 @@ Starts a new BLE attendance session. Only accessible to course-assigned faculty 
   }
   ```
 - **Response**: `201 Created` (Discloses `ephemeral_token` strictly to the starting faculty).
+
+### `GET /api/v1/sessions/{session_id}`
+Returns public session details. Strictly excludes `secret_hash` and `ephemeral_token`.
+
+### `GET /api/v1/sessions/active`
+Lists active sessions for the authenticated user. Students see only active sessions for enrolled courses. Secrets are strictly omitted.
 
 ### `POST /api/v1/sessions/{session_id}/stop`
 Closes an active attendance session.

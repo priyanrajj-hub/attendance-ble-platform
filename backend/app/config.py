@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     FIREBASE_SERVICE_ACCOUNT_PATH: Optional[str] = None
     
     # Security & CORS
+    SECRET_KEY: str = "amrita-ble-attendance-platform-production-key-secret-2026"
     CORS_ORIGINS: List[str] = ["*"]
     ENVIRONMENT: str = "development"
     MAX_CSV_UPLOAD_SIZE_BYTES: int = 2 * 1024 * 1024  # 2 MB max

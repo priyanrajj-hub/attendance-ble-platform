@@ -1,108 +1,97 @@
 import os
+import glob
 import math
+import time
 import uuid
 import hashlib
+import logging
+import threading
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+logger = logging.getLogger(__name__)
+
 DATA_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "data", "lakehouse")
 )
-PARQUET_STORE = os.path.join(DATA_DIR, "telemetry.parquet")
 
 
 class DataEngineeringEngine:
     """
     Enterprise Data Engineering & Telemetry Pipeline.
     Powered by DuckDB and Apache Arrow for vectorized columnar analytics,
-    Parquet partitioned Lakehouse storage, and proxy fraud detection.
+    immutable partitioned Parquet Lakehouse storage, and proxy fraud detection.
     """
 
     def __init__(self, lakehouse_path: Optional[str] = None):
         self.lakehouse_path = lakehouse_path or DATA_DIR
-        os.makedirs(self.lakehouse_path, exist_ok=True)
+        self.partitions_dir = os.path.join(self.lakehouse_path, "partitions")
+        os.makedirs(self.partitions_dir, exist_ok=True)
+        self._lock = threading.Lock()
         self.con = duckdb.connect(database=":memory:")
         self._init_lakehouse()
 
     def _init_lakehouse(self):
-        """Initializes high-performance columnar telemetry schema."""
-        self.con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS ble_telemetry_stream (
-                event_id VARCHAR,
-                session_id VARCHAR,
-                course_id VARCHAR,
-                student_id VARCHAR,
-                roll_number VARCHAR,
-                device_id VARCHAR,
-                rssi_dbm INTEGER,
-                tx_power INTEGER,
-                distance_m DOUBLE,
-                biometric_verified BOOLEAN,
-                signature_hash VARCHAR,
-                packet_count INTEGER,
-                jitter_ms DOUBLE,
-                timestamp TIMESTAMP WITH TIME ZONE
+        """Initializes columnar schema and reloads all persisted Parquet batches."""
+        with self._lock:
+            self.con.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ble_telemetry_stream (
+                    event_id VARCHAR,
+                    session_id VARCHAR,
+                    course_id VARCHAR,
+                    student_id VARCHAR,
+                    roll_number VARCHAR,
+                    device_id VARCHAR,
+                    rssi_dbm INTEGER,
+                    tx_power INTEGER,
+                    distance_m DOUBLE,
+                    biometric_verified BOOLEAN,
+                    signature_hash VARCHAR,
+                    packet_count INTEGER,
+                    jitter_ms DOUBLE,
+                    timestamp TIMESTAMP WITH TIME ZONE
+                )
+                """
             )
-            """
-        )
+        self.reload_from_parquet()
 
-    def ingest_telemetry_batch(self, events: List[Dict[str, Any]]) -> int:
+    def reload_from_parquet(self) -> int:
         """
-        Ingests a batch of BLE telemetry events into the columnar lakehouse
-        and appends to the immutable Parquet audit store.
+        Reloads all immutable Parquet partitions from disk into the DuckDB query engine.
+        Ensures analytics queries access all persisted telemetry across server restarts.
         """
-        if not events:
+        parquet_pattern = os.path.join(self.partitions_dir, "*.parquet")
+        files = glob.glob(parquet_pattern)
+        # Filter out any leftover .tmp files
+        valid_files = [f for f in files if not f.endswith(".tmp")]
+        if not valid_files:
             return 0
 
-        rows = []
-        for e in events:
-            rssi = e.get("rssi_dbm", -70)
-            tx = e.get("tx_power", -59)
-            # Log-distance path loss model: distance = 10 ^ ((tx_power - rssi) / (10 * n))
-            n = 2.2  # Path loss exponent for classroom
-            dist = round(math.pow(10, (tx - rssi) / (10 * n)), 2)
-
-            rows.append(
-                (
-                    e.get("event_id", str(uuid.uuid4())),
-                    str(e.get("session_id", "")),
-                    str(e.get("course_id", "")),
-                    str(e.get("student_id", "")),
-                    str(e.get("roll_number", "")),
-                    str(e.get("device_id", "")),
-                    int(rssi),
-                    int(tx),
-                    float(dist),
-                    bool(e.get("biometric_verified", True)),
-                    str(e.get("signature_hash", hashlib.sha256(b"amrita_biometric_v1").hexdigest())),
-                    int(e.get("packet_count", 1)),
-                    float(e.get("jitter_ms", 12.5)),
-                    e.get("timestamp", datetime.now(timezone.utc)),
+        # Normalize forward slashes for DuckDB read_parquet
+        clean_pattern = parquet_pattern.replace("\\", "/")
+        with self._lock:
+            try:
+                self.con.execute("DELETE FROM ble_telemetry_stream")
+                self.con.execute(
+                    f"INSERT INTO ble_telemetry_stream SELECT * FROM read_parquet('{clean_pattern}')"
                 )
-            )
+                count = self.con.execute("SELECT COUNT(*) FROM ble_telemetry_stream").fetchone()[0]
+                logger.info("Loaded %d telemetry records from %d Parquet partitions.", count, len(valid_files))
+                return count
+            except Exception as e:
+                logger.error("Failed to load Parquet files into DuckDB: %s", e)
+                raise RuntimeError(f"Parquet lakehouse recovery failed: {e}") from e
 
-        self.con.executemany(
-            """
-            INSERT INTO ble_telemetry_stream VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            rows,
-        )
-
-        # Persist to Apache Parquet store
-        try:
-            self._append_to_parquet(rows)
-        except Exception:
-            pass
-
-        return len(rows)
-
-    def _append_to_parquet(self, rows: List[tuple]) -> None:
-        """Appends telemetry rows to Apache Parquet columnar file on disk."""
-        parquet_file = os.path.join(self.lakehouse_path, "telemetry.parquet")
+    def _write_parquet_partition(self, rows: List[tuple]) -> str:
+        """
+        Atomically writes a batch of telemetry events to an immutable Parquet partition file.
+        Uses a temporary file and atomic rename to guarantee crash-resilience.
+        Existing files are NEVER overwritten.
+        """
         schema = pa.schema([
             ("event_id", pa.string()),
             ("session_id", pa.string()),
@@ -139,15 +128,71 @@ class DataEngineeringEngine:
         }
         batch_table = pa.Table.from_pydict(pydict, schema=schema)
 
-        if os.path.exists(parquet_file):
-            try:
-                existing_table = pq.read_table(parquet_file)
-                combined_table = pa.concat_tables([existing_table, batch_table])
-                pq.write_table(combined_table, parquet_file, compression="SNAPPY")
-            except Exception:
-                pq.write_table(batch_table, parquet_file, compression="SNAPPY")
-        else:
-            pq.write_table(batch_table, parquet_file, compression="SNAPPY")
+        batch_id = f"batch_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+        tmp_path = os.path.join(self.partitions_dir, f"{batch_id}.parquet.tmp")
+        final_path = os.path.join(self.partitions_dir, f"{batch_id}.parquet")
+
+        try:
+            pq.write_table(batch_table, tmp_path, compression="SNAPPY")
+            os.replace(tmp_path, final_path)
+            return final_path
+        except Exception as e:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+            logger.error("Failed to persist Parquet partition: %s", e)
+            raise IOError(f"Parquet persistence failed: {e}") from e
+
+    def ingest_telemetry_batch(self, events: List[Dict[str, Any]]) -> int:
+        """
+        Ingests a batch of BLE telemetry events into the columnar lakehouse
+        and persists atomically to an immutable Parquet partition file.
+        """
+        if not events:
+            return 0
+
+        rows = []
+        for e in events:
+            rssi = e.get("rssi_dbm", -70)
+            tx = e.get("tx_power", -59)
+            # Log-distance path loss model: distance = 10 ^ ((tx_power - rssi) / (10 * n))
+            n = 2.2  # Path loss exponent for classroom
+            dist = round(math.pow(10, (tx - rssi) / (10 * n)), 2)
+
+            rows.append(
+                (
+                    e.get("event_id", str(uuid.uuid4())),
+                    str(e.get("session_id", "")),
+                    str(e.get("course_id", "")),
+                    str(e.get("student_id", "")),
+                    str(e.get("roll_number", "")),
+                    str(e.get("device_id", "")),
+                    int(rssi),
+                    int(tx),
+                    float(dist),
+                    bool(e.get("biometric_verified", True)),
+                    str(e.get("signature_hash", hashlib.sha256(b"amrita_biometric_v1").hexdigest())),
+                    int(e.get("packet_count", 1)),
+                    float(e.get("jitter_ms", 12.5)),
+                    e.get("timestamp", datetime.now(timezone.utc)),
+                )
+            )
+
+        # 1. Atomically persist to immutable Parquet partition file (no silent swallow)
+        self._write_parquet_partition(rows)
+
+        # 2. Insert into in-memory DuckDB table
+        with self._lock:
+            self.con.executemany(
+                """
+                INSERT INTO ble_telemetry_stream VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+
+        return len(rows)
 
     def run_proxy_fraud_detection(self, session_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
@@ -156,44 +201,45 @@ class DataEngineeringEngine:
         biometric verification failures, out-of-bounds radio attenuation, and co-located device sharing.
         Uses parameterized queries to prevent SQL injection.
         """
-        if session_id:
-            query = """
-            SELECT 
-                student_id,
-                roll_number,
-                device_id,
-                COUNT(*) as sample_count,
-                AVG(rssi_dbm) as mean_rssi,
-                STDDEV_SAMP(rssi_dbm) as std_rssi,
-                AVG(distance_m) as mean_distance_m,
-                BOOL_AND(biometric_verified) as all_biometric_passed,
-                COUNT(DISTINCT device_id) as device_diversity
-            FROM ble_telemetry_stream
-            WHERE session_id = ?
-            GROUP BY student_id, roll_number, device_id
-            HAVING COUNT(*) >= 2
-            """
-            cur = self.con.execute(query, [str(session_id)])
-        else:
-            query = """
-            SELECT 
-                student_id,
-                roll_number,
-                device_id,
-                COUNT(*) as sample_count,
-                AVG(rssi_dbm) as mean_rssi,
-                STDDEV_SAMP(rssi_dbm) as std_rssi,
-                AVG(distance_m) as mean_distance_m,
-                BOOL_AND(biometric_verified) as all_biometric_passed,
-                COUNT(DISTINCT device_id) as device_diversity
-            FROM ble_telemetry_stream
-            GROUP BY student_id, roll_number, device_id
-            HAVING COUNT(*) >= 2
-            """
-            cur = self.con.execute(query)
+        with self._lock:
+            if session_id:
+                query = """
+                SELECT 
+                    student_id,
+                    roll_number,
+                    device_id,
+                    COUNT(*) as sample_count,
+                    AVG(rssi_dbm) as mean_rssi,
+                    STDDEV_SAMP(rssi_dbm) as std_rssi,
+                    AVG(distance_m) as mean_distance_m,
+                    BOOL_AND(biometric_verified) as all_biometric_passed,
+                    COUNT(DISTINCT device_id) as device_diversity
+                FROM ble_telemetry_stream
+                WHERE session_id = ?
+                GROUP BY student_id, roll_number, device_id
+                HAVING COUNT(*) >= 2
+                """
+                cur = self.con.execute(query, [str(session_id)])
+            else:
+                query = """
+                SELECT 
+                    student_id,
+                    roll_number,
+                    device_id,
+                    COUNT(*) as sample_count,
+                    AVG(rssi_dbm) as mean_rssi,
+                    STDDEV_SAMP(rssi_dbm) as std_rssi,
+                    AVG(distance_m) as mean_distance_m,
+                    BOOL_AND(biometric_verified) as all_biometric_passed,
+                    COUNT(DISTINCT device_id) as device_diversity
+                FROM ble_telemetry_stream
+                GROUP BY student_id, roll_number, device_id
+                HAVING COUNT(*) >= 2
+                """
+                cur = self.con.execute(query)
 
-        cols = [desc[0] for desc in cur.description]
-        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+            cols = [desc[0] for desc in cur.description]
+            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
         anomalies = []
 
         for row in rows:
@@ -240,32 +286,33 @@ class DataEngineeringEngine:
         using vectorized aggregation.
         Uses parameterized queries to prevent SQL injection.
         """
-        if course_id:
-            query = """
-            SELECT 
-                student_id,
-                roll_number,
-                COUNT(DISTINCT session_id) as sessions_attended,
-                (SELECT COUNT(DISTINCT session_id) FROM ble_telemetry_stream WHERE course_id = ?) as total_sessions
-            FROM ble_telemetry_stream
-            WHERE course_id = ?
-            GROUP BY student_id, roll_number
-            """
-            cur = self.con.execute(query, [str(course_id), str(course_id)])
-        else:
-            query = """
-            SELECT 
-                student_id,
-                roll_number,
-                COUNT(DISTINCT session_id) as sessions_attended,
-                (SELECT COUNT(DISTINCT session_id) FROM ble_telemetry_stream) as total_sessions
-            FROM ble_telemetry_stream
-            GROUP BY student_id, roll_number
-            """
-            cur = self.con.execute(query)
+        with self._lock:
+            if course_id:
+                query = """
+                SELECT 
+                    student_id,
+                    roll_number,
+                    COUNT(DISTINCT session_id) as sessions_attended,
+                    (SELECT COUNT(DISTINCT session_id) FROM ble_telemetry_stream WHERE course_id = ?) as total_sessions
+                FROM ble_telemetry_stream
+                WHERE course_id = ?
+                GROUP BY student_id, roll_number
+                """
+                cur = self.con.execute(query, [str(course_id), str(course_id)])
+            else:
+                query = """
+                SELECT 
+                    student_id,
+                    roll_number,
+                    COUNT(DISTINCT session_id) as sessions_attended,
+                    (SELECT COUNT(DISTINCT session_id) FROM ble_telemetry_stream) as total_sessions
+                FROM ble_telemetry_stream
+                GROUP BY student_id, roll_number
+                """
+                cur = self.con.execute(query)
 
-        cols = [desc[0] for desc in cur.description]
-        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+            cols = [desc[0] for desc in cur.description]
+            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
         results = []
 
         for row in rows:
@@ -302,18 +349,19 @@ class DataEngineeringEngine:
         Computes an immutable SHA-256 state seal of all telemetry records,
         guaranteeing zero tampering or retroactive record manipulation.
         """
-        count_res = self.con.execute("SELECT COUNT(*) FROM ble_telemetry_stream").fetchone()
-        count = count_res[0] if count_res else 0
+        with self._lock:
+            count_res = self.con.execute("SELECT COUNT(*) FROM ble_telemetry_stream").fetchone()
+            count = count_res[0] if count_res else 0
 
-        # Hash aggregation over record IDs and timestamps
-        hash_res = self.con.execute(
-            """
-            SELECT COALESCE(STRING_AGG(event_id, ','), 'EMPTY') 
-            FROM (SELECT event_id FROM ble_telemetry_stream ORDER BY timestamp LIMIT 100)
-            """
-        ).fetchone()
-        raw_seed = hash_res[0] if hash_res else "EMPTY"
-        seal_hash = hashlib.sha256(f"amrita_vault_v1:{raw_seed}:{count}".encode("utf-8")).hexdigest()
+            # Hash aggregation over record IDs and timestamps
+            hash_res = self.con.execute(
+                """
+                SELECT COALESCE(STRING_AGG(event_id, ','), 'EMPTY') 
+                FROM (SELECT event_id FROM ble_telemetry_stream ORDER BY timestamp LIMIT 100)
+                """
+            ).fetchone()
+            raw_seed = hash_res[0] if hash_res else "EMPTY"
+            seal_hash = hashlib.sha256(f"amrita_vault_v1:{raw_seed}:{count}".encode("utf-8")).hexdigest()
 
         return {
             "total_records_sealed": count,

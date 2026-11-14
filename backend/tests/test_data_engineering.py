@@ -6,8 +6,8 @@ from app.data_engineering.engine import DataEngineeringEngine
 
 
 @pytest.fixture
-def clean_engine():
-    engine = DataEngineeringEngine()
+def clean_engine(tmp_path):
+    engine = DataEngineeringEngine(lakehouse_path=str(tmp_path))
     return engine
 
 
@@ -142,10 +142,34 @@ def test_cryptographic_audit_seal(clean_engine):
 from app.auth.rbac import get_current_user, AuthenticatedUser
 
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.models.user import User
+
+
 @pytest.mark.asyncio
 async def test_data_pipeline_api_routes(
-    client: AsyncClient, mock_faculty_user: AuthenticatedUser, mock_admin_user: AuthenticatedUser
+    client: AsyncClient,
+    db_session: AsyncSession,
+    mock_faculty_user: AuthenticatedUser,
+    mock_admin_user: AuthenticatedUser,
 ):
+    # Ensure test users exist in database for directory resolution
+    for mu in (mock_faculty_user, mock_admin_user):
+        res = await db_session.execute(select(User).where(User.firebase_uid == mu.uid))
+        if not res.scalar_one_or_none():
+            db_session.add(
+                User(
+                    id=uuid.uuid4(),
+                    firebase_uid=mu.uid,
+                    email=mu.email,
+                    display_name=mu.display_name,
+                    role=mu.role,
+                    status="verified",
+                )
+            )
+    await db_session.commit()
+
     app.dependency_overrides[get_current_user] = lambda: mock_faculty_user
 
     session_id = str(uuid.uuid4())

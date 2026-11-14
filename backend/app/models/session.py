@@ -9,7 +9,7 @@ from app.db.base import Base
 class Session(Base):
     __tablename__ = "sessions"
     __table_args__ = (
-        CheckConstraint("status IN ('active', 'closed')", name="check_session_status"),
+        CheckConstraint("status IN ('active', 'closed', 'cancelled')", name="check_session_status"),
         Index("idx_sessions_course", "course_id", "opens_at"),
     )
 

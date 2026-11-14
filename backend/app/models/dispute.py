@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, ForeignKey, CheckConstraint
+from sqlalchemy import String, Text, DateTime, ForeignKey, CheckConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.base import Base
@@ -12,6 +12,13 @@ class Dispute(Base):
     __table_args__ = (
         CheckConstraint(
             "status IN ('pending', 'approved', 'rejected')", name="check_dispute_status"
+        ),
+        Index(
+            "uq_dispute_pending_session_student",
+            "session_id",
+            "student_id",
+            unique=True,
+            postgresql_where="status = 'pending'",
         ),
     )
 

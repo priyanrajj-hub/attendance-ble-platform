@@ -105,7 +105,7 @@ async def submit_dispute(
             detail="A pending attendance dispute for this session already exists.",
         )
 
-    # 5. Create dispute
+    # 5. Create dispute inside a nested savepoint to handle concurrent race conditions atomically
     now = datetime.now(timezone.utc)
     new_dispute = Dispute(
         session_id=sid,
@@ -114,8 +114,15 @@ async def submit_dispute(
         status="pending",
         created_at=now,
     )
-    db.add(new_dispute)
-    await db.flush()
+    try:
+        async with db.begin_nested():
+            db.add(new_dispute)
+            await db.flush()
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A pending attendance dispute for this session already exists.",
+        )
 
     # 6. Audit log entry
     audit_entry = AuditLog(
@@ -237,6 +244,7 @@ async def resolve_dispute(
         .join(Course, Course.id == Session.course_id)
         .join(User, User.id == Dispute.student_id)
         .where(Dispute.id == did)
+        .with_for_update(of=Dispute)
     )
     res = await db.execute(stmt)
     row = res.first()

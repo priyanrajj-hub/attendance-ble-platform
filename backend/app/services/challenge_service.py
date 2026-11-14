@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.models.session import Session
 from app.models.challenge import Challenge
+from app.services.session_crypto import SessionCrypto
 
 
 class ChallengeService:
@@ -89,8 +90,9 @@ class ChallengeService:
             if abs(now_ms - client_timestamp) > 60_000:
                 return False
 
-        # Check against 128-bit session-bound rotating challenges
-        valid_128 = cls.get_valid_challenges(session.secret_hash, str(session.id), now)
+        # Check against 128-bit session-bound rotating challenges using decrypted secret
+        decrypted_secret = SessionCrypto.decrypt_session_secret(session.secret_hash)
+        valid_128 = cls.get_valid_challenges(decrypted_secret, str(session.id), now)
         if clean_nonce in [c.lower() for c in valid_128]:
             return True
 

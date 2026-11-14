@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends, status
+from typing import Optional
+import uuid
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.auth.rbac import AuthenticatedUser, require_role
 from app.db.session import get_db
 from app.schemas.checkin import CheckInPayload, CheckInResponse
 from app.services.attendance_service import AttendanceService
+from app.services.attendance_calculation_service import AttendanceCalculationService
+from app.models.user import User
 
 router = APIRouter(prefix="/attendance", tags=["Attendance Check-In"])
 
@@ -93,3 +98,59 @@ async def get_my_history(
             "signature_verified": att.signature_verified,
         })
     return records
+
+
+@router.get("/summary", summary="Get Authoritative Attendance Calculation Summary")
+async def get_attendance_summary(
+    student_id: Optional[str] = Query(None, description="Target student UUID or roll number (Faculty/Admin only)"),
+    min_attendance_pct: float = Query(75.0, description="Minimum institutional attendance percentage threshold"),
+    condonation_min_pct: float = Query(65.0, description="Minimum condonation threshold percentage"),
+    current_user: AuthenticatedUser = Depends(require_role(["student", "faculty", "admin"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Authoritative Attendance Calculation Engine:
+    - Calculates exact attendance percentage per course and overall from PostgreSQL sessions.
+    - Accurately tracks conducted vs attended vs missed sessions.
+    - Computes exact safe skips remaining and classes needed to achieve minimum threshold.
+    - Honors configurable institutional policy thresholds (e.g. 75% min, 65% condonation).
+    - Students are strictly isolated to their own records.
+    """
+    if current_user.role == "student":
+        u_stmt = select(User).where(User.firebase_uid == current_user.uid)
+        u_res = await db.execute(u_stmt)
+        user_record = u_res.scalar_one_or_none()
+        if not user_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student profile not found",
+            )
+        target_student_id = user_record.id
+    else:
+        if not student_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="student_id query parameter is required for faculty/admin requests",
+            )
+        try:
+            target_student_id = uuid.UUID(student_id)
+        except ValueError:
+            # Try finding user by roll number or email
+            u_stmt = select(User).where(
+                (User.roll_number == student_id.strip()) | (User.email == student_id.strip())
+            )
+            u_res = await db.execute(u_stmt)
+            target_user = u_res.scalar_one_or_none()
+            if not target_user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Target student '{student_id}' not found",
+                )
+            target_student_id = target_user.id
+
+    return await AttendanceCalculationService.get_attendance_summary(
+        db=db,
+        student_id=target_student_id,
+        min_attendance_pct=min_attendance_pct,
+        condonation_min_pct=condonation_min_pct,
+    )

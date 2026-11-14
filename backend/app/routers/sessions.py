@@ -17,6 +17,7 @@ from app.models.enrollment import Enrollment
 from app.models.attendance_record import AttendanceRecord
 from app.models.override import Override
 from app.models.audit_log import AuditLog
+from app.services.session_crypto import SessionCrypto
 
 router = APIRouter(prefix="/sessions", tags=["Attendance Sessions"])
 
@@ -79,9 +80,9 @@ async def start_session(
             detail="You are not authorized to start sessions for this course.",
         )
 
-    # Generate 256-bit cryptographically secure session rotation secret (Part 2: 256 bits of secret entropy)
+    # Generate 256-bit cryptographically secure session rotation secret
     ephemeral_token = secrets.token_hex(32)
-    secret_hash = ephemeral_token
+    secret_hash = SessionCrypto.encrypt_session_secret(ephemeral_token)
 
     now = datetime.now(timezone.utc)
     closes_at = now + timedelta(minutes=payload.duration_minutes)
@@ -217,6 +218,34 @@ async def list_active_sessions(
         )
         for s in sessions
     ]
+
+
+@router.get("/{session_id}", response_model=SessionPublicResponse, summary="Get Session Details")
+async def get_session_details(
+    session_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        sid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session UUID")
+
+    stmt = select(Session).where(Session.id == sid)
+    res = await db.execute(stmt)
+    sess = res.scalar_one_or_none()
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return SessionPublicResponse(
+        id=str(sess.id),
+        course_id=str(sess.course_id),
+        room_label=sess.room_label,
+        rssi_threshold=sess.rssi_threshold,
+        opens_at=sess.opens_at,
+        closes_at=sess.closes_at,
+        status=sess.status,
+    )
 
 
 @router.get("/{session_id}/roster", summary="Get Live Attendance Roster for Session")

@@ -9,6 +9,8 @@ from app.db.session import get_db
 from app.models.session import Session
 from app.models.course import Course
 from app.models.user import User
+from app.models.enrollment import Enrollment
+from app.models.device import Device
 from app.data_engineering.engine import data_engineering_engine
 
 router = APIRouter(prefix="/pipeline", tags=["Data Engineering & Telemetry"])
@@ -45,20 +47,132 @@ async def ingest_telemetry_batch(
 ):
     """
     Ingests BLE radio advertisement telemetry records into the high-speed DuckDB Lakehouse.
-    Protected endpoint: requires authenticated user.
+    Protected endpoint:
+    1. Rejects unresolvable institutional users (403).
+    2. Enforces radio physical bounds (-120 <= rssi <= 0, -100 <= tx_power <= 20, packet_count >= 1).
+    3. Verifies student identity binding (cannot submit telemetry for other students).
+    4. Validates session existence and course enrollment for students.
+    5. Verifies device ownership (cannot use a device registered to another user).
+    6. Enforces faculty course ownership and cross-institution boundary isolation.
     """
-    # If user is a student, ensure they only ingest telemetry for themselves
+    # 1. Authoritative Directory Lookup: Reject unresolvable users
+    u_stmt = select(User).where(User.firebase_uid == current_user.uid)
+    u_res = await db.execute(u_stmt)
+    user_record = u_res.scalar_one_or_none()
+    if not user_record:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authenticated user cannot be resolved in institutional directory.",
+        )
+
+    # 2. Field-level Radio Telemetry Bounds Validation
+    for e in payload.events:
+        if not (-120 <= e.rssi_dbm <= 0):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid RSSI value: {e.rssi_dbm} dBm. Must be between -120 and 0 dBm.",
+            )
+        if not (-100 <= e.tx_power <= 20):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid Tx Power: {e.tx_power} dBm. Must be between -100 and 20 dBm.",
+            )
+        if e.packet_count < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid packet count: {e.packet_count}. Must be at least 1.",
+            )
+        if e.jitter_ms < 0.0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid jitter: {e.jitter_ms}. Cannot be negative.",
+            )
+
+    # 3. Student-specific Authorization & Integrity Checks
     if current_user.role == "student":
-        u_stmt = select(User).where(User.firebase_uid == current_user.uid)
-        u_res = await db.execute(u_stmt)
-        user_record = u_res.scalar_one_or_none()
-        if user_record:
-            for e in payload.events:
-                if e.student_id != str(user_record.id) and e.student_id != user_record.firebase_uid:
+        for e in payload.events:
+            # Identity Binding Check
+            if e.student_id != str(user_record.id) and e.student_id != user_record.firebase_uid:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Students may only submit telemetry events matching their own identity.",
+                )
+            if user_record.roll_number and e.roll_number and e.roll_number.strip().upper() != user_record.roll_number.strip().upper():
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Submitted roll number does not match authenticated user.",
+                )
+
+            # Device Possession Check (Must not belong to another user)
+            if e.device_id:
+                dev = None
+                try:
+                    dev_uuid = uuid.UUID(e.device_id)
+                    dev_res = await db.execute(select(Device).where(Device.id == dev_uuid))
+                    dev = dev_res.scalar_one_or_none()
+                except ValueError:
+                    dev_res = await db.execute(
+                        select(Device).where(Device.public_key_fingerprint == e.device_id)
+                    )
+                    dev = dev_res.scalar_one_or_none()
+
+                if dev and dev.user_id != user_record.id:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Students may only submit telemetry events matching their own identity.",
+                        detail="Telemetry device is registered to another student.",
                     )
+
+            # Session Ownership & Course Enrollment Check
+            if e.session_id:
+                try:
+                    sid = uuid.UUID(e.session_id)
+                    sess_res = await db.execute(select(Session).where(Session.id == sid))
+                    sess = sess_res.scalar_one_or_none()
+                    if sess:
+                        enr_stmt = select(Enrollment).where(
+                            Enrollment.course_id == sess.course_id,
+                            Enrollment.student_id == user_record.id,
+                            Enrollment.status == "active",
+                        )
+                        enr = (await db.execute(enr_stmt)).scalar_one_or_none()
+                        if not enr:
+                            raise HTTPException(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Student is not enrolled in the course for this session.",
+                            )
+
+                        # Cross-institution Isolation
+                        crs = (await db.execute(select(Course).where(Course.id == sess.course_id))).scalar_one_or_none()
+                        if crs and crs.institution_id and user_record.institution_id and crs.institution_id != user_record.institution_id:
+                            raise HTTPException(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Cross-institution telemetry submission forbidden.",
+                            )
+                except ValueError:
+                    pass
+
+    # 4. Faculty-specific Course Ownership & Cross-Institution Checks
+    elif current_user.role == "faculty":
+        for e in payload.events:
+            if e.session_id:
+                try:
+                    sid = uuid.UUID(e.session_id)
+                    sess_res = await db.execute(select(Session).where(Session.id == sid))
+                    sess = sess_res.scalar_one_or_none()
+                    if sess:
+                        crs = (await db.execute(select(Course).where(Course.id == sess.course_id))).scalar_one_or_none()
+                        if crs and crs.faculty_id != user_record.id and sess.started_by != user_record.id:
+                            raise HTTPException(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Faculty not authorized to ingest telemetry for this course.",
+                            )
+                        if crs and crs.institution_id and user_record.institution_id and crs.institution_id != user_record.institution_id:
+                            raise HTTPException(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Cross-institution telemetry submission forbidden.",
+                            )
+                except ValueError:
+                    pass
 
     raw_events = [e.model_dump() for e in payload.events]
     count = data_engineering_engine.ingest_telemetry_batch(raw_events)
