@@ -75,9 +75,9 @@ async def start_session(
             detail="You are not authorized to start sessions for this course.",
         )
 
-    # Generate ephemeral nonce token
-    ephemeral_token = secrets.token_hex(16)
-    secret_hash = hashlib.sha256(ephemeral_token.encode("utf-8")).hexdigest()
+    # Generate 256-bit cryptographically secure session rotation secret (Part 2: 256 bits of secret entropy)
+    ephemeral_token = secrets.token_hex(32)
+    secret_hash = ephemeral_token
 
     now = datetime.now(timezone.utc)
     closes_at = now + timedelta(minutes=payload.duration_minutes)

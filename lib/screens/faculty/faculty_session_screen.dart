@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../ble/beacon_broadcaster.dart';
 import '../../ble/code_rotator.dart';
 import '../../ble/flutter_ble_peripheral_broadcaster.dart';
+import '../../services/attendance_api_service.dart';
 import '../../models/attendance_record.dart';
 import '../../models/attendance_session.dart';
 import '../../models/enrollment.dart';
@@ -87,10 +88,20 @@ class _FacultySessionScreenState extends ConsumerState<FacultySessionScreen> {
         _isCreatingSession = false;
       });
 
-      // 2. Start CodeRotator with BeaconBroadcaster
+      // 2. Start authoritative backend session and initialize CodeRotator
+      final apiService = ref.read(attendanceApiServiceProvider);
+      final apiSession = await apiService.startSession(
+        courseId: widget.courseId,
+        roomLabel: 'Classroom',
+        durationMinutes: 30,
+        rssiThreshold: -75,
+      );
+      final sessionSecret = apiSession?['ephemeral_token'] as String?;
+
       _codeRotator?.dispose();
       _codeRotator = CodeRotator(
         sessionId: session.id,
+        sessionSecret: sessionSecret,
         broadcaster: _broadcaster!,
       );
       await _codeRotator!.start();
@@ -145,6 +156,9 @@ class _FacultySessionScreenState extends ConsumerState<FacultySessionScreen> {
   Future<void> _closeSession() async {
     if (_currentSession == null) return;
     try {
+      final apiService = ref.read(attendanceApiServiceProvider);
+      await apiService.stopSession(_currentSession!.id);
+
       await FirebaseFirestore.instance
           .collection('sessions')
           .doc(_currentSession!.id)

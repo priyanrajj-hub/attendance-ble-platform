@@ -27,11 +27,32 @@ class BleConstants {
     return '414d5254-424c-4500-0000-0000$cleanCode';
   }
 
+  /// Builds a standard 128-bit RFC4122 UUID from a 32-hex cryptographic challenge.
+  static String buildChallengeUuid(String challenge32Hex) {
+    final clean = challenge32Hex.replaceAll(RegExp(r'[^0-9a-fA-F]'), '').toLowerCase();
+    if (clean.length != 32) {
+      throw ArgumentError('128-bit challenge must be exactly 32 hex characters: $challenge32Hex');
+    }
+    return '${clean.substring(0, 8)}-${clean.substring(8, 12)}-${clean.substring(12, 16)}-${clean.substring(16, 20)}-${clean.substring(20, 32)}';
+  }
+
   /// Extracts the 8-hex code from an advertisement UUID if it matches the app namespace.
   static String? extractCode(String uuidString) {
     final clean = uuidString.replaceAll('-', '').toLowerCase();
     if (clean.length == 32 && clean.startsWith(namespaceHex)) {
       return clean.substring(24, 32);
+    }
+    return null;
+  }
+
+  /// Extracts the challenge from a UUID string, supporting both 128-bit challenge UUIDs and legacy namespaced UUIDs.
+  static String? extractChallenge(String uuidString) {
+    final clean = uuidString.replaceAll('-', '').toLowerCase();
+    if (clean.length == 32) {
+      if (clean.startsWith(namespaceHex)) {
+        return clean.substring(24, 32);
+      }
+      return clean;
     }
     return null;
   }

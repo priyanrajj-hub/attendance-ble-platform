@@ -147,11 +147,11 @@ async def test_device_registration_and_signature_e2e(
     fingerprint = dev_data["public_key_fingerprint"]
     assert len(fingerprint) == 64
 
-    # 2. Derive valid rotating challenge code
+    # 2. Derive valid 128-bit rotating challenge code (session-bound)
     sess = e2e_setup["session"]
     now = datetime.now(timezone.utc)
-    step = int(now.timestamp()) // 30
-    code = ChallengeService.compute_totp_code(sess.secret_hash, step)
+    step = int(now.timestamp()) // ChallengeService.ROTATION_PERIOD_SECONDS
+    code = ChallengeService.compute_challenge(sess.secret_hash, str(sess.id), step)
 
     # 3. Create digital signature over session_id:code:client_timestamp
     timestamp = int(now.timestamp() * 1000)
@@ -225,8 +225,8 @@ async def test_forged_device_signature_rejected(
 
     sess = e2e_setup["session"]
     now = datetime.now(timezone.utc)
-    step = int(now.timestamp()) // 30
-    code = ChallengeService.compute_totp_code(sess.secret_hash, step)
+    step = int(now.timestamp()) // ChallengeService.ROTATION_PERIOD_SECONDS
+    code = ChallengeService.compute_challenge(sess.secret_hash, str(sess.id), step)
 
     # Sign with a completely different foreign private key
     foreign_priv = ec.generate_private_key(ec.SECP256R1())
@@ -261,8 +261,8 @@ async def test_expired_rotating_code_rejected(
     sess = e2e_setup["session"]
     now = datetime.now(timezone.utc)
     # Stale step from 10 minutes ago
-    stale_step = (int(now.timestamp()) - 600) // 30
-    stale_code = ChallengeService.compute_totp_code(sess.secret_hash, stale_step)
+    stale_step = (int(now.timestamp()) - 600) // ChallengeService.ROTATION_PERIOD_SECONDS
+    stale_code = ChallengeService.compute_challenge(sess.secret_hash, str(sess.id), stale_step)
 
     res = await client.post(
         "/api/v1/attendance/check-in",
@@ -307,8 +307,8 @@ async def test_unenrolled_student_rejected(
 
     sess = e2e_setup["session"]
     now = datetime.now(timezone.utc)
-    step = int(now.timestamp()) // 30
-    code = ChallengeService.compute_totp_code(sess.secret_hash, step)
+    step = int(now.timestamp()) // ChallengeService.ROTATION_PERIOD_SECONDS
+    code = ChallengeService.compute_challenge(sess.secret_hash, str(sess.id), step)
 
     res = await client.post(
         "/api/v1/attendance/check-in",

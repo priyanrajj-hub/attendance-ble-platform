@@ -135,6 +135,56 @@ class AttendanceApiService {
       return AttendanceApiResponse.failure('Check-in communication failed: $e');
     }
   }
+
+  Future<Map<String, dynamic>?> startSession({
+    required String courseId,
+    required String roomLabel,
+    int durationMinutes = 30,
+    int rssiThreshold = -75,
+  }) async {
+    final token = await _auth.currentUser?.getIdToken();
+    final url = Uri.parse('$_baseUrl/api/v1/sessions/start');
+
+    try {
+      final request = await _client.postUrl(url);
+      request.headers.set('Content-Type', 'application/json');
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+
+      final payload = {
+        'course_id': courseId,
+        'room_label': roomLabel,
+        'duration_minutes': durationMinutes,
+        'rssi_threshold': rssiThreshold,
+      };
+
+      request.add(utf8.encode(jsonEncode(payload)));
+      final response = await request.close().timeout(const Duration(seconds: 12));
+      final responseBody = await response.transform(utf8.decoder).join();
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(responseBody) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<bool> stopSession(String sessionId) async {
+    final token = await _auth.currentUser?.getIdToken();
+    final url = Uri.parse('$_baseUrl/api/v1/sessions/$sessionId/stop');
+
+    try {
+      final request = await _client.postUrl(url);
+      request.headers.set('Content-Type', 'application/json');
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {}
+    return false;
+  }
 }
 
 final attendanceApiServiceProvider = Provider<AttendanceApiService>((ref) {

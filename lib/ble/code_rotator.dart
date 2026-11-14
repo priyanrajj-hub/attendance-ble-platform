@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'beacon_broadcaster.dart';
 import 'ble_constants.dart';
+import 'challenge_crypto.dart';
 
 enum BeaconHealth {
   idle,
@@ -15,6 +16,7 @@ enum BeaconHealth {
 
 class CodeRotator {
   final String sessionId;
+  final String? sessionSecret;
   final BeaconBroadcaster _broadcaster;
   final FirebaseFirestore _firestore;
 
@@ -30,6 +32,7 @@ class CodeRotator {
 
   CodeRotator({
     required this.sessionId,
+    this.sessionSecret,
     required BeaconBroadcaster broadcaster,
     FirebaseFirestore? firestore,
   })  : _broadcaster = broadcaster,
@@ -76,14 +79,26 @@ class CodeRotator {
     );
   }
 
+  String _deriveNextChallenge() {
+    if (sessionSecret != null && sessionSecret!.isNotEmpty) {
+      final step = ChallengeCrypto.currentStep();
+      return ChallengeCrypto.computeChallenge(
+        sessionSecret: sessionSecret!,
+        sessionId: sessionId,
+        step: step,
+      );
+    }
+    return generate8HexCode();
+  }
+
   Future<void> _rotateAndAdvertise() async {
     if (_isRotating || _isDisposed) return;
     _isRotating = true;
     try {
       _prevCode = _currentCode;
-      _currentCode = generate8HexCode();
+      _currentCode = _deriveNextChallenge();
 
-      // 1. Write rotated code to Firestore
+      // 1. Write rotated code projection to Firestore
       final liveRef = _firestore
           .collection('sessions')
           .doc(sessionId)
@@ -100,8 +115,10 @@ class CodeRotator {
 
       await liveRef.set(data);
 
-      // 2. Restart advertising with new 128-bit UUID
-      final uuid = BleConstants.buildBeaconUuid(_currentCode!);
+      // 2. Restart advertising with 128-bit challenge UUID
+      final uuid = _currentCode!.length == 32
+          ? BleConstants.buildChallengeUuid(_currentCode!)
+          : BleConstants.buildBeaconUuid(_currentCode!);
       await _broadcaster.start(uuid);
 
       _setHealth(BeaconHealth.advertising);

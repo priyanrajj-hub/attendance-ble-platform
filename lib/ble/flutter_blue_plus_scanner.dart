@@ -19,7 +19,7 @@ class FlutterBluePlusScanner implements BeaconScanner {
     _subscription = FlutterBluePlus.scanResults.listen((results) {
       for (final result in results) {
         for (final guid in result.advertisementData.serviceUuids) {
-          final code = BleConstants.extractCode(guid.toString());
+          final code = BleConstants.extractChallenge(guid.toString());
           if (code != null) {
             _sightingController.add(BeaconSighting(
               code: code,

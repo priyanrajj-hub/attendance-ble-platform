@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -54,19 +53,16 @@ class StudentCheckInController extends StateNotifier<CheckInState> {
   final BiometricService _biometricService;
   final DeviceBindingService _deviceBindingService;
   final BeaconScanner _scanner;
-  final FirebaseFirestore _firestore;
   final AttendanceApiService? _apiService;
 
   StudentCheckInController({
     required BiometricService biometricService,
     required DeviceBindingService deviceBindingService,
     required BeaconScanner scanner,
-    FirebaseFirestore? firestore,
     AttendanceApiService? apiService,
   })  : _biometricService = biometricService,
         _deviceBindingService = deviceBindingService,
         _scanner = scanner,
-        _firestore = firestore ?? FirebaseFirestore.instance,
         _apiService = apiService,
         super(const CheckInIdle());
 
@@ -162,104 +158,35 @@ class StudentCheckInController extends StateNotifier<CheckInState> {
       return;
     }
 
-    // 6. Write Attendance Record Authoritatively
+    // 6. Submit Proximity Attendance Exclusively to PostgreSQL Authority via FastAPI
     state = CheckInSubmitting(code: winner.code, rssi: meanRssi.round());
 
-    // Primary Authority: FastAPI + PostgreSQL Ledger
-    if (_apiService != null) {
-      try {
-        final apiRes = await _apiService.submitProximityCheckIn(
-          sessionId: sessionId,
-          ephemeralNonce: winner.code,
-          observedRssi: meanRssi.round(),
-          publicKeyFingerprint: localDeviceId,
-        );
-
-        if (apiRes.isSuccess) {
-          // Update ephemeral Firestore projection for real-time faculty roster streaming
-          try {
-            final recordRef = _firestore
-                .collection('sessions')
-                .doc(sessionId)
-                .collection('attendance')
-                .doc(studentUid);
-            await recordRef.set({
-              'studentUid': studentUid,
-              'markedAt': FieldValue.serverTimestamp(),
-              'method': 'ble_signed_nonce',
-              'code': winner.code,
-              'rssi': meanRssi.round(),
-              'deviceId': localDeviceId,
-            });
-          } catch (_) {}
-
-          state = CheckInSuccess(
-            sessionId: sessionId,
-            serverTime: apiRes.verifiedAt,
-            rssi: meanRssi.round(),
-          );
-          return;
-        } else if (apiRes.statusCode == 403) {
-          state = const CheckInError(CodeRejectedFailure());
-          return;
-        } else {
-          state = CheckInError(UnknownBleFailure(apiRes.errorMessage ?? 'Check-in failed'));
-          return;
-        }
-      } catch (e) {
-        // Fall back to Firestore write if backend unreachable
-      }
+    if (_apiService == null) {
+      state = const CheckInError(UnknownBleFailure('Authoritative attendance service is unconfigured.'));
+      return;
     }
 
-    // Secondary / Fallback: Cloud Firestore
     try {
-      final recordRef = _firestore
-          .collection('sessions')
-          .doc(sessionId)
-          .collection('attendance')
-          .doc(studentUid);
-
-      await recordRef.set({
-        'studentUid': studentUid,
-        'markedAt': FieldValue.serverTimestamp(),
-        'method': 'ble',
-        'code': winner.code,
-        'rssi': meanRssi.round(),
-        'deviceId': localDeviceId,
-      });
-
-      state = CheckInSuccess(
+      final apiRes = await _apiService.submitProximityCheckIn(
         sessionId: sessionId,
-        serverTime: DateTime.now(),
-        rssi: meanRssi.round(),
+        ephemeralNonce: winner.code,
+        observedRssi: meanRssi.round(),
+        publicKeyFingerprint: localDeviceId,
       );
-    } on FirebaseException catch (e) {
-      if (e.code == 'permission-denied') {
-        // Distinguish already-marked from code rejected
-        try {
-          final recordRef = _firestore
-              .collection('sessions')
-              .doc(sessionId)
-              .collection('attendance')
-              .doc(studentUid);
-          final existing = await recordRef.get();
-          if (existing.exists) {
-            final markedAt = existing.data()?['markedAt'];
-            final markedDate = markedAt is Timestamp ? markedAt.toDate() : DateTime.now();
-            state = CheckInSuccess(
-              sessionId: sessionId,
-              serverTime: markedDate,
-              rssi: (existing.data()?['rssi'] as num?)?.toInt() ?? meanRssi.round(),
-            );
-            return;
-          }
-        } catch (_) {}
+
+      if (apiRes.isSuccess) {
+        state = CheckInSuccess(
+          sessionId: sessionId,
+          serverTime: apiRes.verifiedAt,
+          rssi: meanRssi.round(),
+        );
+      } else if (apiRes.statusCode == 403) {
         state = const CheckInError(CodeRejectedFailure());
       } else {
-        state = CheckInError(UnknownBleFailure(e.message ?? e.code));
+        state = CheckInError(UnknownBleFailure(apiRes.errorMessage ?? 'Attendance verification failed on server.'));
       }
     } catch (e) {
-      state = CheckInError(UnknownBleFailure('Check-in write failed: $e'));
+      state = CheckInError(UnknownBleFailure('Backend attendance connection failed: $e'));
     }
   }
 
@@ -296,7 +223,6 @@ final studentCheckInControllerProvider =
     biometricService: ref.watch(biometricServiceProvider),
     deviceBindingService: ref.watch(deviceBindingServiceProvider),
     scanner: FlutterBluePlusScanner(),
-    firestore: FirebaseFirestore.instance,
     apiService: ref.watch(attendanceApiServiceProvider),
   );
 });
