@@ -43,6 +43,8 @@ android {
                 keyPassword = keystoreProperties["keyPassword"] as String
                 storeFile = file(keystoreProperties["storeFile"] as String)
                 storePassword = keystoreProperties["storePassword"] as String
+            } else if (project.hasProperty("strictSigning") || System.getenv("STRICT_RELEASE_SIGNING") == "true") {
+                throw GradleException("Release keystore configuration (android/key.properties) is required for production builds.")
             } else {
                 val debugConfig = signingConfigs.getByName("debug")
                 storeFile = debugConfig.storeFile

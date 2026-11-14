@@ -110,3 +110,18 @@ Build outputs:
 - `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk`
 - `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
 - `build/app/outputs/flutter-apk/app-x86_64-release.apk`
+
+---
+
+## Security Threat Model & Implementation Guarantees
+
+1. **Rotating BLE Cryptographic Nonces:**
+   - Active tokens rotate every 20 seconds.
+   - The previous token (`prevCode`) is permitted for a strict 45-second grace window enforced by `firestore.rules` (`request.time <= live.rotatedAt + duration.value(45, 's')`), mitigating packet arrival delay while blocking replay attacks.
+2. **Client-Measured RSSI Boundary:**
+   - RSSI is measured on the client device (-100 dBm to 0 dBm). In zero-trust architecture, client-side RF measurements are treated as untrusted metadata heuristics; primary proximity proof relies on real-time rotating nonces, one-time hardware device bindings, and physical enrollment checks.
+3. **Hardware Biometric Identity Binding:**
+   - Biometrics prompts require `biometricOnly: true` (preventing lockscreen PIN bypass).
+   - Each student account is bound to a single physical device UUID, resettable only by an administrator.
+4. **Relay Attack Mitigation:**
+   - Fast rotation (20s) and biometric prompts significantly raise the barrier against remote proxy attendance. As with all RF/BLE protocols without specialized ultra-wideband (UWB) time-of-flight hardware, physical RF relay over low-latency networks remains a physical limitation acknowledged by the platform architecture.

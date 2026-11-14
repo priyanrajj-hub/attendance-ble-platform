@@ -1,7 +1,7 @@
 import os
 import io
 import base64
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -111,7 +111,7 @@ async def download_apk():
                 "Cache-Control": "public, max-age=3600",
             },
         )
-    return {"error": "APK not found. Please compile the app first."}
+    raise HTTPException(status_code=404, detail="APK not found. Please compile the app first.")
 
 
 @app.api_route("/download/universal", methods=["GET", "HEAD"], summary="Download Universal Release APK")
@@ -126,7 +126,7 @@ async def download_universal_apk():
                 "Content-Disposition": 'attachment; filename="AmritaAttendance-universal-release.apk"',
             },
         )
-    return {"error": "Universal APK not found."}
+    raise HTTPException(status_code=404, detail="Universal APK not found.")
 
 
 @app.api_route("/download/arm64", methods=["GET", "HEAD"], summary="Download arm64-v8a Release APK")
@@ -141,13 +141,14 @@ async def download_arm64_apk():
                 "Content-Disposition": 'attachment; filename="AmritaAttendance-arm64-release.apk"',
             },
         )
-    return {"error": "ARM64 APK not found."}
+    raise HTTPException(status_code=404, detail="ARM64 APK not found.")
 
 
 @app.get("/download", response_class=HTMLResponse, summary="APK Download Hub with QR Code")
 async def download_landing_page():
     """Generates a responsive APK download hub with an auto-generated QR code for instant mobile camera scanning."""
-    qr_data = "http://192.168.1.13:8000/download/app.apk"
+    base_url = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000")
+    qr_data = f"{base_url}/download/app.apk"
     qr = qrcode.QRCode(
         version=1,
         box_size=8,

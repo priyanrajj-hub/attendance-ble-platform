@@ -100,7 +100,8 @@ service cloud.firestore {
           && request.resource.data.rssi >= -100 && request.resource.data.rssi <= 0
           && request.resource.data.deviceId == me().deviceId
           && (request.resource.data.code == get(/databases/$(database)/documents/sessions/$(sid)/live/current).data.code
-           || request.resource.data.code == get(/databases/$(database)/documents/sessions/$(sid)/live/current).data.prevCode);
+           || (request.resource.data.code == get(/databases/$(database)/documents/sessions/$(sid)/live/current).data.prevCode
+               && request.time <= get(/databases/$(database)/documents/sessions/$(sid)/live/current).data.rotatedAt + duration.value(45, 's')));
         // faculty manual override (always labelled, never silent)
         allow create, update: if ownsSession(sid)
           && enrolled(sess(sid).courseId, uid)
