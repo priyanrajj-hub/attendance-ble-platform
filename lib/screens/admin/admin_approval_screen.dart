@@ -6,6 +6,7 @@ import '../../models/course.dart';
 import '../../models/enrollment.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/admin_approval_repository.dart';
+import '../../services/attendance_api_service.dart';
 
 class AdminApprovalScreen extends ConsumerStatefulWidget {
   const AdminApprovalScreen({super.key});
@@ -161,6 +162,11 @@ class _AdminApprovalScreenState extends ConsumerState<AdminApprovalScreen> with 
 
               if (code.isNotEmpty && title.isNotEmpty && room.isNotEmpty && facultyUid.isNotEmpty) {
                 try {
+                  // 1. Authoritative creation in PostgreSQL via FastAPI
+                  final api = ref.read(attendanceApiServiceProvider);
+                  await api.createCourse(code: code, name: title, term: 'Fall 2026');
+
+                  // 2. Real-time projection to Firestore
                   await FirebaseFirestore.instance.collection('courses').doc(code).set({
                     'code': code,
                     'title': title,

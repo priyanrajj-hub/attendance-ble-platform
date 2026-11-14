@@ -158,6 +158,34 @@ async def get_course_detail(
     if not c:
         raise HTTPException(status_code=404, detail="Course not found.")
 
+    # Enforce strict resource authorization (Admin, Assigned Faculty, or Enrolled Student)
+    if current_user.role != "admin":
+        u_stmt = select(User).where(User.firebase_uid == current_user.uid)
+        u_res = await db.execute(u_stmt)
+        user_record = u_res.scalar_one_or_none()
+        if not user_record:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User record not found.")
+
+        if current_user.role == "faculty":
+            if c.faculty_id != user_record.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You are not authorized to access details for another instructor's course.",
+                )
+        else:
+            # Student: must be actively enrolled
+            enr_check = select(Enrollment).where(
+                Enrollment.course_id == c.id,
+                Enrollment.student_id == user_record.id,
+                Enrollment.status == "active",
+            )
+            enr_check_res = await db.execute(enr_check)
+            if not enr_check_res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You are not enrolled in this course.",
+                )
+
     count_stmt = select(func.count(Enrollment.id)).where(
         Enrollment.course_id == c.id, Enrollment.status == "active"
     )

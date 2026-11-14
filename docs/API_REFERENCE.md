@@ -57,7 +57,52 @@ Starts a new BLE attendance session. Only accessible to course-assigned faculty 
 Closes an active attendance session.
 
 ### `GET /api/v1/sessions/{session_id}/roster`
-Returns live enrollment and attendance status for all students in the course.
+Returns live enrollment and attendance status for all students in the course. Restricted to the assigned course instructor or administrator.
+
+---
+
+## 3. Attendance Disputes & Correction Requests
+
+### `POST /api/v1/disputes`
+Submits an attendance grievance/dispute for a missed session.
+- **Role**: `student` (Must be enrolled in the session's course).
+- **Request Body**:
+  ```json
+  {
+    "session_id": "00000000-0000-0000-0000-000000000001",
+    "reason": "Phone Bluetooth radio failed to advertise during class. Seated in Row 3."
+  }
+  ```
+- **Response**: `201 Created`
+
+### `GET /api/v1/disputes`
+Lists disputes scoped to the requesting role:
+- `student`: sees own submitted disputes.
+- `faculty`: sees disputes for sessions belonging to courses taught by instructor.
+- `admin`: sees all disputes.
+
+### `POST /api/v1/disputes/{dispute_id}/resolve`
+Approves or rejects a student's attendance dispute.
+- **Role**: `faculty` (Assigned instructor) or `admin`.
+- **Request Body**:
+  ```json
+  {
+    "decision": "approved",
+    "resolution_notes": "Verified student was present in seat B-12."
+  }
+  ```
+- **Response**: `200 OK` (Updates attendance record to `present`, inserts `Override` row, and commits immutable `AuditLog`).
+
+---
+
+## 4. Hardware Device Binding & Attestation
+
+### `POST /api/v1/devices/attestation-challenge`
+Issues a 256-bit cryptographically secure random challenge with 300-second TTL for remote hardware attestation.
+
+### `POST /api/v1/devices/register`
+Registers device public key PEM. If an X.509 Keymaster/KeyMint certificate chain or Play Integrity token is supplied, sets status to `hardware_attested`; otherwise defaults to `key_registered`.
+
 
 ### `POST /api/v1/sessions/{session_id}/manual-override`
 Authoritative manual attendance override recorded by the session faculty.

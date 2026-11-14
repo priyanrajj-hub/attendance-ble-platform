@@ -239,6 +239,22 @@ async def get_session_roster(
     if not sess:
         raise HTTPException(status_code=404, detail="Session not found.")
 
+    # Enforce faculty session ownership if not admin
+    if current_user.role != "admin":
+        u_stmt = select(User).where(User.firebase_uid == current_user.uid)
+        u_res = await db.execute(u_stmt)
+        user_record = u_res.scalar_one_or_none()
+        if not user_record or sess.started_by != user_record.id:
+            # Check if user is the assigned faculty for the session's course
+            c_stmt = select(Course.faculty_id).where(Course.id == sess.course_id)
+            c_res = await db.execute(c_stmt)
+            course_faculty_id = c_res.scalar_one_or_none()
+            if not user_record or course_faculty_id != user_record.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You are not authorized to view the live roster for another instructor's session.",
+                )
+
     # Fetch active enrollments with user record
     enr_stmt = (
         select(Enrollment, User)

@@ -17,7 +17,8 @@
 | **Network Configuration** | **READY** | Dynamic backend URL configuration dialog in Flutter client for physical handset testing. |
 | **RBAC & Authorization** | **READY** | FastAPI dependencies enforce zero-trust role verification and domain whitelisting. |
 | **Firestore Security Rules** | **READY** | Client direct writes to attendance completely disabled (`allow write: if false;`). |
-| **Code Quality & Test Coverage** | **READY** | `flutter analyze` 0 issues; `flutter test` 36/36 pass; `pytest` 41/41 pass. |
+| **Attendance Grievance & Disputes** | **READY** | Full dispute lifecycle (`POST /api/v1/disputes`, review & resolution with audit logs). |
+| **Code Quality & Test Coverage** | **READY** | `flutter analyze` 0 issues; `flutter test` 36/36 pass; `pytest` 44/44 pass. |
 | **Physical Airwave BLE Validation** | **PENDING** | **NOT TESTED** - 0 physical devices connected to host. Requires physical pilot verification. |
 
 ---

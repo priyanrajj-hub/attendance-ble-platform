@@ -39,6 +39,17 @@ async def export_course_attendance_csv(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
 
+    # Enforce faculty course ownership if not admin
+    if current_user.role != "admin":
+        u_stmt = select(User).where(User.firebase_uid == current_user.uid)
+        u_res = await db.execute(u_stmt)
+        user_record = u_res.scalar_one_or_none()
+        if not user_record or course.faculty_id != user_record.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to export attendance records for another instructor's course.",
+            )
+
     # Total closed/held sessions for this course
     sess_stmt = select(func.count(Session.id)).where(Session.course_id == cid)
     sess_res = await db.execute(sess_stmt)

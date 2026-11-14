@@ -25,6 +25,7 @@ from app.routers import (
     checkin,
     devices,
     data_pipeline,
+    disputes,
 )
 
 app = FastAPI(
@@ -61,6 +62,7 @@ app.include_router(reports.router, prefix=settings.API_V1_STR)
 app.include_router(checkin.router, prefix=settings.API_V1_STR)
 app.include_router(devices.router, prefix=settings.API_V1_STR)
 app.include_router(data_pipeline.router, prefix=settings.API_V1_STR)
+app.include_router(disputes.router, prefix=settings.API_V1_STR)
 
 # 4. Mount Interactive Web Application & Anime Simulator
 preview_path = os.path.abspath(

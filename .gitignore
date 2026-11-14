@@ -93,6 +93,8 @@ npm-debug.log*
 build/symbols/
 __pycache__/
 *.pyc
+backend/data/
+*.parquet
 
 # =========================
 # Secrets & Credentials

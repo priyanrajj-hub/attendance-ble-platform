@@ -54,6 +54,7 @@ class StudentCheckInController extends StateNotifier<CheckInState> {
   final DeviceBindingService _deviceBindingService;
   final BeaconScanner _scanner;
   final AttendanceApiService? _apiService;
+  static bool _deviceKeyRegistered = false;
 
   StudentCheckInController({
     required BiometricService biometricService,
@@ -166,12 +167,17 @@ class StudentCheckInController extends StateNotifier<CheckInState> {
     }
 
     try {
-      // Ensure hardware device public key is registered with backend
-      final pem = await _deviceBindingService.getPublicKeyPem();
-      await _apiService.registerDevice(
-        publicKeyPem: pem,
-        platform: 'android',
-      );
+      // Register hardware device public key if not yet registered in this session
+      if (!_deviceKeyRegistered) {
+        final pem = await _deviceBindingService.getPublicKeyPem();
+        final registered = await _apiService.registerDevice(
+          publicKeyPem: pem,
+          platform: 'android',
+        );
+        if (registered) {
+          _deviceKeyRegistered = true;
+        }
+      }
 
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final signature = await _deviceBindingService.signPayload(

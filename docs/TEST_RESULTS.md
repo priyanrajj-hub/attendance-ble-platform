@@ -11,7 +11,7 @@
 |---|---|---|---|---|---|
 | **Flutter Static Analysis** | `flutter analyze` | Full Dart codebase | 0 issues | 0 | **PASS** |
 | **Flutter Unit & Widget Tests**| `flutter test` | 36 | 36 | 0 | **PASS** |
-| **Backend Integration Tests** | `pytest -v` | 41 | 41 | 0 | **PASS** |
+| **Backend Integration Tests** | `pytest -v` | 44 | 44 | 0 | **PASS** |
 | **APK Binary Generation** | `flutter build apk --debug`| 1 target | 1 | 0 | **SUCCESS** |
 | **Physical Hardware Suite** | `adb devices` | N/A | 0 attached | N/A | **NOT TESTED** |
 
@@ -62,7 +62,11 @@ tests/test_roster_security.py::test_csv_upload_size_limit_rejected PASSED [ 95%]
 tests/test_roster_security.py::test_csv_malformed_utf8_rejected PASSED   [ 97%]
 tests/test_roster_security.py::test_csv_valid_import_and_formula_defense PASSED [100%]
 
-============================= 41 passed in 18.01s =============================
+tests/test_disputes_and_auth_scoping.py::test_student_submit_dispute_and_lifecycle PASSED
+tests/test_disputes_and_auth_scoping.py::test_student_dispute_unenrolled_rejected PASSED
+tests/test_disputes_and_auth_scoping.py::test_cross_faculty_authorization_defenses PASSED
+
+============================= 44 passed in 14.39s =============================
 ```
 
 ---
@@ -89,4 +93,4 @@ tests/test_roster_security.py::test_csv_valid_import_and_formula_defense PASSED 
 - **Path**: `build/app/outputs/flutter-apk/app-debug.apk`
 - **File Size**: `219,509,065 bytes` (~209.3 MB)
 - **SHA-256 Checksum**:
-  `294DB6FBF52E44B5F0E4A6119FA0552FF9A73A37C60565E439B1AF33E99E50EB`
+  `E050B9F73709AD57ADF49577321ED1E99DB51681C6B991D50A4E359BA749449F`

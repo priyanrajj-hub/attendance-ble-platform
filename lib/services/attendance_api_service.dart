@@ -307,6 +307,128 @@ class AttendanceApiService {
     } catch (_) {}
     return false;
   }
+
+  Future<List<Map<String, dynamic>>> getCourses() async {
+    final token = await _auth.currentUser?.getIdToken();
+    final url = Uri.parse('$_baseUrl/api/v1/courses');
+
+    try {
+      final request = await _client.getUrl(url);
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      final responseBody = await response.transform(utf8.decoder).join();
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = jsonDecode(responseBody) as List;
+        return decoded.cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<Map<String, dynamic>?> createCourse({
+    required String code,
+    required String name,
+    required String term,
+  }) async {
+    final token = await _auth.currentUser?.getIdToken();
+    final url = Uri.parse('$_baseUrl/api/v1/courses');
+
+    try {
+      final request = await _client.postUrl(url);
+      request.headers.set('Content-Type', 'application/json');
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+
+      final payload = {
+        'code': code,
+        'name': name,
+        'term': term,
+      };
+
+      request.add(utf8.encode(jsonEncode(payload)));
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      final responseBody = await response.transform(utf8.decoder).join();
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(responseBody) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<bool> submitDispute({
+    required String sessionId,
+    required String reason,
+  }) async {
+    final token = await _auth.currentUser?.getIdToken();
+    final url = Uri.parse('$_baseUrl/api/v1/disputes');
+
+    try {
+      final request = await _client.postUrl(url);
+      request.headers.set('Content-Type', 'application/json');
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+
+      final payload = {
+        'session_id': sessionId,
+        'reason': reason,
+      };
+
+      request.add(utf8.encode(jsonEncode(payload)));
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {}
+    return false;
+  }
+
+  Future<List<Map<String, dynamic>>> getDisputes() async {
+    final token = await _auth.currentUser?.getIdToken();
+    final url = Uri.parse('$_baseUrl/api/v1/disputes');
+
+    try {
+      final request = await _client.getUrl(url);
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      final responseBody = await response.transform(utf8.decoder).join();
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = jsonDecode(responseBody) as List;
+        return decoded.cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<bool> resolveDispute({
+    required String disputeId,
+    required String decision,
+    String? resolutionNotes,
+  }) async {
+    final token = await _auth.currentUser?.getIdToken();
+    final url = Uri.parse('$_baseUrl/api/v1/disputes/$disputeId/resolve');
+
+    try {
+      final request = await _client.postUrl(url);
+      request.headers.set('Content-Type', 'application/json');
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+
+      final payload = {
+        'decision': decision,
+        if (resolutionNotes != null) 'resolution_notes': resolutionNotes,
+      };
+
+      request.add(utf8.encode(jsonEncode(payload)));
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {}
+    return false;
+  }
 }
 
 final attendanceApiServiceProvider = Provider<AttendanceApiService>((ref) {
