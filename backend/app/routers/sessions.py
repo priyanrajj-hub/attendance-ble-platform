@@ -13,6 +13,7 @@ from app.models.session import Session
 from app.models.course import Course
 from app.models.user import User
 from app.models.enrollment import Enrollment
+from app.models.attendance_record import AttendanceRecord
 
 router = APIRouter(prefix="/sessions", tags=["Attendance Sessions"])
 
@@ -51,15 +52,15 @@ async def start_session(
     """
     try:
         cid = uuid.UUID(payload.course_id)
+        c_stmt = select(Course).where(Course.id == cid)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid course ID format.")
+        c_stmt = select(Course).where(Course.code == payload.course_id.strip())
 
-    # Check course exists
-    c_stmt = select(Course).where(Course.id == cid)
     c_res = await db.execute(c_stmt)
     course = c_res.scalar_one_or_none()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
+    cid = course.id
 
     # Get faculty user record
     u_stmt = select(User).where(User.firebase_uid == current_user.uid)
