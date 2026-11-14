@@ -1,0 +1,5 @@
+# Backend Environment Folder Security
+# All backend configurations, database secrets, and credentials in this folder are completely protected from git tracking.
+*
+!.gitignore
+!.env.example
