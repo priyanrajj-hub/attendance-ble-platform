@@ -2,101 +2,123 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Reads directly from the Database instead of using Cloud Function Custom Claims
-    function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    function emailOk()  { return request.auth != null && request.auth.token.email_verified == true; }
+    function me()       { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isRole(r)  { return emailOk() && me().role == r && me().status == 'verified'; }
+    function isAdmin()   { return isRole('admin'); }
+    function isFaculty() { return isRole('faculty'); }
+    function isStudent() { return isRole('student'); }
+    function sess(id)    { return get(/databases/$(database)/documents/sessions/$(id)).data; }
+    function ownsSession(id) { return isFaculty() && sess(id).facultyId == request.auth.uid; }
+    function enrolled(courseId, uid) {
+      return exists(/databases/$(database)/documents/enrollments/$(courseId + '_' + uid));
     }
 
-    // ── Users collection ──────────────────────────────────────────
-    match /users/{userId} {
-      
-      // Allow users to read their own doc REGARDLESS of email_verified 
-      // so the UI can source their name/role and show "Please verify email". 
-      // Allow Faculty and Admins full access to render rosters.
-      allow read: if request.auth != null &&
-                     (
-                       request.auth.uid == userId || 
-                       isAdmin() || 
-                       (request.auth.token.email_verified == true && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'faculty' && resource.data.role == 'student')
-                     );
-
-      allow create: if request.auth != null && request.auth.uid == userId &&
-          request.resource.data.keys().hasOnly(['name', 'rollNo', 'role', 'email', 'parentEmail', 'photoUrl', 'status', 'uidPrefix', 'createdAt']) &&
-          request.resource.data.status == 'pending_verification' &&
-          !('verifiedBy' in request.resource.data) &&
-          !('verifiedAt' in request.resource.data) &&
-          request.resource.data.email == request.auth.token.email &&
-          (
-            (request.resource.data.role == 'student' &&
-             request.auth.token.email.matches('^[a-zA-Z0-9._-]+@ch\\.students\\.amrita\\.edu$'))
-            ||
-            (request.resource.data.role == 'faculty' &&
-             request.auth.token.email.matches('^[a-zA-Z0-9._-]+@ch\\.amrita\\.edu$'))
-          );
-
-      // Block all clients (including admins) from updating status, role, verifiedBy, or verifiedAt.
-      // Server-side Firebase Admin SDK bypasses security rules, so backend approvals remain authoritative.
-      allow update: if request.auth != null && request.auth.uid == userId &&
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'role', 'verifiedBy', 'verifiedAt']);
+    match /users/{uid} {
+      allow get:  if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name','email','role','status','rollNo','createdAt'])
+        && request.resource.data.keys().hasAll(['name','email','role','status','createdAt'])
+        && request.resource.data.status == 'pending_verification'
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 80
+        && request.resource.data.createdAt == request.time
+        && ((request.resource.data.role == 'student'
+              && request.auth.token.email.matches('^[a-zA-Z0-9._-]+@ch\\.students\\.amrita\\.edu$'))
+         || (request.resource.data.role == 'faculty'
+              && request.auth.token.email.matches('^[a-zA-Z0-9._-]+@ch\\.amrita\\.edu$')));
+      // self-service: name, and deviceId exactly once
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','deviceId'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['deviceId'])
+            || !('deviceId' in resource.data));
+      // admin: every admin write must stamp verifiedBy/verifiedAt
+      allow update: if isAdmin() && uid != request.auth.uid && resource.data.role != 'admin'
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status','verifiedBy','verifiedAt','rejectionReason','deviceId'])
+        && request.resource.data.status in ['pending_verification','verified','rejected','suspended']
+        && request.resource.data.verifiedBy == request.auth.uid
+        && request.resource.data.verifiedAt == request.time;
     }
 
-    // ── Sessions collection ───────────────────────────────────────
-    match /sessions/{sessionId} {
-      allow read: if request.auth != null && request.auth.token.email_verified == true;
-      
-      allow create: if request.auth != null && request.auth.token.email_verified == true &&
-                       (
-                         (request.resource.data.facultyId == request.auth.uid && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'faculty')
-                         || isAdmin()
-                       );
-                       
-      allow update: if request.auth != null && request.auth.token.email_verified == true &&
-                       (
-                         (resource.data.facultyId == request.auth.uid &&
-                          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['facultyId']))
-                         || isAdmin()
-                       );
-      
-      // Private subcollection containing details (hmacSecret) - only faculty owner or admin can read/write.
-      match /private/details {
-        allow read: if request.auth != null && request.auth.token.email_verified == true &&
-                      (resource.data.facultyId == request.auth.uid || isAdmin());
-        allow write: if request.auth != null && request.auth.token.email_verified == true &&
-                       ((resource == null && request.resource.data.facultyId == request.auth.uid) ||
-                        (resource != null && resource.data.facultyId == request.auth.uid) || isAdmin());
+    match /courses/{courseId} {
+      allow read: if isAdmin()
+        || (isFaculty() && request.auth.uid in resource.data.facultyIds)
+        || (isStudent() && enrolled(courseId, request.auth.uid));
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['code','title','room','facultyIds']);
+      allow delete: if isAdmin();
+    }
+
+    match /enrollments/{eid} {
+      allow read: if isAdmin()
+        || (isStudent() && resource.data.studentUid == request.auth.uid)
+        || (isFaculty() && request.auth.uid in
+              get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.facultyIds);
+      allow create, update: if isAdmin()
+        && eid == request.resource.data.courseId + '_' + request.resource.data.studentUid
+        && request.resource.data.keys().hasOnly(['courseId','studentUid','studentName','rollNo','enrolledAt']);
+      allow delete: if isAdmin();
+    }
+
+    match /sessions/{sid} {
+      // no secrets live here
+      allow read: if emailOk();
+      allow create: if isFaculty()
+        && request.resource.data.keys().hasOnly(['courseId','facultyId','startedAt','endsAt','status'])
+        && request.resource.data.facultyId == request.auth.uid
+        && request.auth.uid in get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.facultyIds
+        && request.resource.data.status == 'open'
+        && request.resource.data.startedAt == request.time
+        && request.resource.data.endsAt > request.time
+        && request.resource.data.endsAt <= request.time + duration.value(30, 'm');
+      allow update: if ownsSession(sid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','endsAt'])
+        && request.resource.data.status in ['open','closed']
+        && request.resource.data.endsAt <= resource.data.startedAt + duration.value(30, 'm');
+
+      match /live/current {
+        allow read: if ownsSession(sid);
+        allow create, update: if ownsSession(sid)
+          && request.resource.data.keys().hasOnly(['code','prevCode','rotatedAt'])
+          && request.resource.data.code is string && request.resource.data.code.size() == 8
+          && request.resource.data.rotatedAt == request.time;
       }
 
-      // Attendance subcollection - no client writes, all updates must go through markAttendance... 
-      // WAIT: we abandoned cloud functions! Client MUST be able to mark attendance.
-      match /attendance/{studentId} {
-        allow read: if request.auth != null && request.auth.token.email_verified == true &&
-                      (request.auth.uid == studentId ||
-                       get(/databases/$(database)/documents/sessions/$(sessionId)).data.facultyId == request.auth.uid ||
-                       isAdmin());
-        // Students CANNOT write. The BLE architecture relies on the Faculty Scanner app pushing the attendance document.
-        allow write: if request.auth != null && request.auth.token.email_verified == true && 
-                      (get(/databases/$(database)/documents/sessions/$(sessionId)).data.facultyId == request.auth.uid || isAdmin());
+      match /attendance/{uid} {
+        allow read: if isAdmin() || ownsSession(sid) || (isStudent() && request.auth.uid == uid);
+        allow create: if isStudent() && request.auth.uid == uid
+          && sess(sid).status == 'open' && request.time < sess(sid).endsAt
+          && enrolled(sess(sid).courseId, uid)
+          && request.resource.data.keys().hasOnly(['studentUid','markedAt','method','code','rssi','deviceId'])
+          && request.resource.data.studentUid == uid
+          && request.resource.data.method == 'ble'
+          && request.resource.data.markedAt == request.time
+          && request.resource.data.rssi is int
+          && request.resource.data.rssi >= -100 && request.resource.data.rssi <= 0
+          && request.resource.data.deviceId == me().deviceId
+          && (request.resource.data.code == get(/databases/$(database)/documents/sessions/$(sid)/live/current).data.code
+           || request.resource.data.code == get(/databases/$(database)/documents/sessions/$(sid)/live/current).data.prevCode);
+        // faculty manual override (always labelled, never silent)
+        allow create, update: if ownsSession(sid)
+          && enrolled(sess(sid).courseId, uid)
+          && request.resource.data.keys().hasOnly(['studentUid','markedAt','method','markedBy','reason'])
+          && request.resource.data.studentUid == uid
+          && request.resource.data.method == 'manual'
+          && request.resource.data.markedBy == request.auth.uid
+          && request.resource.data.markedAt == request.time
+          && request.resource.data.reason is string && request.resource.data.reason.size() >= 3;
+        allow delete: if ownsSession(sid) && sess(sid).status == 'open';
       }
-
-      match /audit/{auditId} {
-        allow read: if request.auth != null && request.auth.token.email_verified == true && isAdmin();
-        allow write: if false;
-      }
     }
 
-    // ── Notifications collection ──────────────────────────────────
-    match /notifications/{notificationId} {
-      allow read: if request.auth != null && request.auth.token.email_verified == true &&
-                     resource.data.studentUid == request.auth.uid;
-      allow create: if request.auth != null && request.auth.token.email_verified == true &&
-                       request.resource.data.studentUid == request.auth.uid &&
-                       !request.resource.data.keys().hasAny(['recipients', 'body', 'subject', 'status']);
+    // student attendance history (collection-group query filtered on studentUid)
+    match /{path=**}/attendance/{uid} {
+      allow read: if isStudent() && resource.data.studentUid == request.auth.uid;
     }
 
-    // ── Default deny ──────────────────────────────────────────────
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    match /{document=**} { allow read, write: if false; }
   }
 }
-

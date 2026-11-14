@@ -1,10 +1,13 @@
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
+const firebase = require('firebase/compat/app');
+require('firebase/compat/firestore');
 const { readFileSync } = require('fs');
+
+const serverTimestamp = () => firebase.firestore.FieldValue.serverTimestamp();
 
 let testEnv;
 
 before(async () => {
-    // Initialize the emulator environment.
     testEnv = await initializeTestEnvironment({
         projectId: 'attendance-ble-app-test',
         firestore: {
@@ -13,332 +16,720 @@ before(async () => {
             port: 8080,
         },
     });
-    it('Client CANNOT forge verifiedBy or verifiedAt on creation', async () => {
-        const studentContext = testEnv.authenticatedContext('studentForge', { email: 'forge@ch.students.amrita.edu' });
-        const db = studentContext.firestore();
+});
 
-        // Attempting to set verifiedBy on creation must fail
-        await assertFails(db.collection('users').doc('studentForge').set({
-            role: 'student',
-            email: 'forge@ch.students.amrita.edu',
-            status: 'pending_verification',
-            verifiedBy: 'adminA',
-            name: 'Bob',
-            rollNo: '123'
-        }));
-
-        // Attempting to set verifiedAt on creation must fail
-        await assertFails(db.collection('users').doc('studentForge').set({
-            role: 'student',
-            email: 'forge@ch.students.amrita.edu',
-            status: 'pending_verification',
-            verifiedAt: new Date().toISOString(),
-            name: 'Bob',
-            rollNo: '123'
-        }));
-    });
-
-    it('Client CANNOT update status, role, verifiedBy, or verifiedAt on update', async () => {
-        const studentAContext = testEnv.authenticatedContext('studentA', { email_verified: true });
-        const db = studentAContext.firestore();
-
-        // 1. Attempting to elevate status to verified must fail
-        await assertFails(db.collection('users').doc('studentA').update({
-            status: 'verified'
-        }));
-
-        // 2. Attempting to escalate role to faculty/admin must fail
-        await assertFails(db.collection('users').doc('studentA').update({
-            role: 'admin'
-        }));
-
-        // 3. Attempting to forge verifiedBy must fail
-        await assertFails(db.collection('users').doc('studentA').update({
-            verifiedBy: 'adminA'
-        }));
-
-        // 4. Updating display name or photoUrl succeeds
-        await assertSucceeds(db.collection('users').doc('studentA').update({
-            name: 'Arun Updated'
-        }));
-    });
-
-    it('Admin client CANNOT directly update user status in Firestore (must use backend API)', async () => {
-        const adminContext = testEnv.authenticatedContext('adminA', { email_verified: true });
-        const db = adminContext.firestore();
-
-        // Admin attempting client-side direct write to student status must fail
-        await assertFails(db.collection('users').doc('studentA').update({
-            status: 'verified',
-            verifiedBy: 'adminA'
-        }));
-    });
+after(async () => {
+    if (testEnv) {
+        await testEnv.cleanup();
+    }
 });
 
 beforeEach(async () => {
     await testEnv.clearFirestore();
 
-    // Set up mock users for reading tests
+    // Seed baseline entities using disabled security rules
     await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
-        await db.collection('users').doc('studentA').set({
-            role: 'student', email: 'a@ch.students.amrita.edu', status: 'pending_verification'
-        });
-        await db.collection('users').doc('studentB').set({
-            role: 'student', email: 'b@ch.students.amrita.edu', status: 'pending_verification'
-        });
-        await db.collection('users').doc('facultyA').set({
-            role: 'faculty', email: 'c@ch.amrita.edu', status: 'pending_verification'
-        });
-        await db.collection('users').doc('adminA').set({
-            role: 'admin', email: 'admin@ch.amrita.edu', status: 'verified'
-        });
-    });
-    it('Client CANNOT forge verifiedBy or verifiedAt on creation', async () => {
-        const studentContext = testEnv.authenticatedContext('studentForge', { email: 'forge@ch.students.amrita.edu' });
-        const db = studentContext.firestore();
+        const now = new Date();
 
-        // Attempting to set verifiedBy on creation must fail
-        await assertFails(db.collection('users').doc('studentForge').set({
-            role: 'student',
-            email: 'forge@ch.students.amrita.edu',
-            status: 'pending_verification',
-            verifiedBy: 'adminA',
-            name: 'Bob',
-            rollNo: '123'
-        }));
-
-        // Attempting to set verifiedAt on creation must fail
-        await assertFails(db.collection('users').doc('studentForge').set({
-            role: 'student',
-            email: 'forge@ch.students.amrita.edu',
-            status: 'pending_verification',
-            verifiedAt: new Date().toISOString(),
-            name: 'Bob',
-            rollNo: '123'
-        }));
-    });
-
-    it('Client CANNOT update status, role, verifiedBy, or verifiedAt on update', async () => {
-        const studentAContext = testEnv.authenticatedContext('studentA', { email_verified: true });
-        const db = studentAContext.firestore();
-
-        // 1. Attempting to elevate status to verified must fail
-        await assertFails(db.collection('users').doc('studentA').update({
-            status: 'verified'
-        }));
-
-        // 2. Attempting to escalate role to faculty/admin must fail
-        await assertFails(db.collection('users').doc('studentA').update({
-            role: 'admin'
-        }));
-
-        // 3. Attempting to forge verifiedBy must fail
-        await assertFails(db.collection('users').doc('studentA').update({
-            verifiedBy: 'adminA'
-        }));
-
-        // 4. Updating display name or photoUrl succeeds
-        await assertSucceeds(db.collection('users').doc('studentA').update({
-            name: 'Arun Updated'
-        }));
-    });
-
-    it('Admin client CANNOT directly update user status in Firestore (must use backend API)', async () => {
-        const adminContext = testEnv.authenticatedContext('adminA', { email_verified: true });
-        const db = adminContext.firestore();
-
-        // Admin attempting client-side direct write to student status must fail
-        await assertFails(db.collection('users').doc('studentA').update({
+        // 1. Admin
+        await db.collection('users').doc('admin1').set({
+            name: 'Chief Admin',
+            email: 'admin@ch.amrita.edu',
+            role: 'admin',
             status: 'verified',
-            verifiedBy: 'adminA'
-        }));
+            createdAt: now,
+        });
+
+        // 2. Verified Faculty
+        await db.collection('users').doc('faculty1').set({
+            name: 'Prof. Faculty One',
+            email: 'fac1@ch.amrita.edu',
+            role: 'faculty',
+            status: 'verified',
+            createdAt: now,
+        });
+
+        // 3. Other Faculty
+        await db.collection('users').doc('faculty2').set({
+            name: 'Prof. Faculty Two',
+            email: 'fac2@ch.amrita.edu',
+            role: 'faculty',
+            status: 'verified',
+            createdAt: now,
+        });
+
+        // 4. Verified Student with bound device
+        await db.collection('users').doc('student1').set({
+            name: 'Student One',
+            email: 'stu1@ch.students.amrita.edu',
+            role: 'student',
+            status: 'verified',
+            rollNo: 'AM.EN.U4CSE21001',
+            deviceId: 'device-uuid-stu1',
+            createdAt: now,
+        });
+
+        // 5. Verified Student without device
+        await db.collection('users').doc('student2').set({
+            name: 'Student Two',
+            email: 'stu2@ch.students.amrita.edu',
+            role: 'student',
+            status: 'verified',
+            rollNo: 'AM.EN.U4CSE21002',
+            createdAt: now,
+        });
+
+        // 6. Course assigned to faculty1
+        await db.collection('courses').doc('CSE450').set({
+            code: '19CSE450',
+            title: 'Mobile Computing',
+            room: 'Room 204',
+            facultyIds: ['faculty1'],
+        });
+
+        // 7. Enrollment for student1 in CSE450
+        await db.collection('enrollments').doc('CSE450_student1').set({
+            courseId: 'CSE450',
+            studentUid: 'student1',
+            studentName: 'Student One',
+            rollNo: 'AM.EN.U4CSE21001',
+            enrolledAt: now,
+        });
     });
 });
 
-afterEach(async () => {
-    await testEnv.clearFirestore();
-});
+describe('Phase 3 Comprehensive Firestore Security Rules Suite', () => {
 
-after(async () => {
-    await testEnv.cleanup();
-});
+    // ── Suite 1: User Registration ───────────────────────────────────────────
+    describe('1. User Registration (users/{uid} create)', () => {
+        it('allows student registration with official domain and valid keys', async () => {
+            const ctx = testEnv.authenticatedContext('newStudent', {
+                email: 'newstu@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('users').doc('newStudent').set({
+                name: 'New Student',
+                email: 'newstu@ch.students.amrita.edu',
+                role: 'student',
+                status: 'pending_verification',
+                rollNo: 'AM.EN.U4CSE21050',
+                createdAt: serverTimestamp(),
+            }));
+        });
 
-describe('Firestore Security Rules', () => {
+        it('allows faculty registration with official domain and valid keys', async () => {
+            const ctx = testEnv.authenticatedContext('newFaculty', {
+                email: 'newfac@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('users').doc('newFaculty').set({
+                name: 'New Faculty',
+                email: 'newfac@ch.amrita.edu',
+                role: 'faculty',
+                status: 'pending_verification',
+                createdAt: serverTimestamp(),
+            }));
+        });
 
-    it('Student A cannot read Student B doc, but can read their own', async () => {
-        const studentAContext = testEnv.authenticatedContext('studentA', { email_verified: true });
-        const db = studentAContext.firestore();
+        it('denies registration when createdAt is not request.time', async () => {
+            const ctx = testEnv.authenticatedContext('badTimeUser', {
+                email: 'badtime@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('users').doc('badTimeUser').set({
+                name: 'Bad Time',
+                email: 'badtime@ch.students.amrita.edu',
+                role: 'student',
+                status: 'pending_verification',
+                createdAt: new Date(Date.now() - 60000), // forged client timestamp
+            }));
+        });
 
-        // Should succeed reading their own doc
-        await assertSucceeds(db.collection('users').doc('studentA').get());
-        // Should fail reading Student B's doc
-        await assertFails(db.collection('users').doc('studentB').get());
+        it('denies registration with commercial/personal domain', async () => {
+            const ctx = testEnv.authenticatedContext('badEmailUser', {
+                email: 'attacker@gmail.com',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('users').doc('badEmailUser').set({
+                name: 'Bad Email',
+                email: 'attacker@gmail.com',
+                role: 'student',
+                status: 'pending_verification',
+                createdAt: serverTimestamp(),
+            }));
+        });
+
+        it('denies registration self-assigning role admin', async () => {
+            const ctx = testEnv.authenticatedContext('fakeAdmin', {
+                email: 'fakeadmin@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('users').doc('fakeAdmin').set({
+                name: 'Fake Admin',
+                email: 'fakeadmin@ch.amrita.edu',
+                role: 'admin',
+                status: 'pending_verification',
+                createdAt: serverTimestamp(),
+            }));
+        });
+
+        it('denies registration with extra/forbidden keys (verifiedBy, fullName)', async () => {
+            const ctx = testEnv.authenticatedContext('extraKeysUser', {
+                email: 'extra@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('users').doc('extraKeysUser').set({
+                name: 'Extra Keys',
+                fullName: 'Extra Keys',
+                email: 'extra@ch.students.amrita.edu',
+                role: 'student',
+                status: 'pending_verification',
+                verifiedBy: 'admin1',
+                createdAt: serverTimestamp(),
+            }));
+        });
+
+        it('denies registration with status other than pending_verification', async () => {
+            const ctx = testEnv.authenticatedContext('selfVerified', {
+                email: 'selfver@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('users').doc('selfVerified').set({
+                name: 'Self Verified',
+                email: 'selfver@ch.students.amrita.edu',
+                role: 'student',
+                status: 'verified',
+                createdAt: serverTimestamp(),
+            }));
+        });
     });
 
-    it('Faculty can read a student doc, but CANNOT read other faculty/admin docs (Restricted for privacy)', async () => {
-        const facultyAContext = testEnv.authenticatedContext('facultyA', { email_verified: true });
-        const db = facultyAContext.firestore();
+    // ── Suite 2: Self-Service Profile Updates & Device Binding ───────────────
+    describe('2. Profile Updates and Device Binding', () => {
+        it('allows student to set deviceId exactly once', async () => {
+            const ctx = testEnv.authenticatedContext('student2', {
+                email: 'stu2@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('users').doc('student2').update({
+                deviceId: 'unique-device-uuid-stu2',
+            }));
+        });
 
-        // Faculty reading student A
-        await assertSucceeds(db.collection('users').doc('studentA').get());
-        // Faculty reading an admin (should fail due to resource.data.role == 'student' restriction)
-        await assertFails(db.collection('users').doc('adminA').get());
+        it('denies student rewriting existing deviceId', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('users').doc('student1').update({
+                deviceId: 'new-forged-device-id',
+            }));
+        });
+
+        it('denies user changing their own role or status', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('users').doc('student1').update({
+                status: 'verified',
+                role: 'faculty',
+            }));
+        });
     });
 
-    it('Student cannot write to attendance/{their own uid}', async () => {
-        const studentAContext = testEnv.authenticatedContext('studentA', { email_verified: true });
-        const db = studentAContext.firestore();
-
-        // They are trying to mark themselves present
-        await assertFails(db.collection('sessions').doc('sessionX').collection('attendance').doc('studentA').set({
-            present: true
-        }));
-    });
-
-    it('Only the owning faculty (or admin) can write attendance', async () => {
-        // First, create a session owned by facultyA
-        await testEnv.withSecurityRulesDisabled(async (context) => {
-            const db = context.firestore();
-            await db.collection('sessions').doc('sessionX').set({
-                facultyId: 'facultyA',
+    // ── Suite 3: Admin Approvals & Stamps ────────────────────────────────────
+    describe('3. Admin Approvals and Review Operations', () => {
+        beforeEach(async () => {
+            await testEnv.withSecurityRulesDisabled(async (context) => {
+                const db = context.firestore();
+                await db.collection('users').doc('pendingUser').set({
+                    name: 'Pending User',
+                    email: 'pen@ch.students.amrita.edu',
+                    role: 'student',
+                    status: 'pending_verification',
+                    createdAt: new Date(),
+                });
             });
         });
 
-        const facultyAContext = testEnv.authenticatedContext('facultyA', { email_verified: true });
-        const dbFaculty = facultyAContext.firestore();
-
-        // Faculty marking studentA present should succeed
-        await assertSucceeds(dbFaculty.collection('sessions').doc('sessionX').collection('attendance').doc('studentA').set({
-            present: true
-        }));
-
-        // Admin should also succeed
-        const adminAContext = testEnv.authenticatedContext('adminA', { email_verified: true });
-        const dbAdmin = adminAContext.firestore();
-        await assertSucceeds(dbAdmin.collection('sessions').doc('sessionX').collection('attendance').doc('studentB').set({
-            present: true
-        }));
-
-        // A DIFFERENT faculty should fail
-        const facultyBContext = testEnv.authenticatedContext('facultyB', { email_verified: true });
-        await testEnv.withSecurityRulesDisabled(async (context) => {
-            await context.firestore().collection('users').doc('facultyB').set({ role: 'faculty' });
+        it('allows admin to approve pending user with verifiedBy and verifiedAt stamps', async () => {
+            const ctx = testEnv.authenticatedContext('admin1', {
+                email: 'admin@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('users').doc('pendingUser').update({
+                status: 'verified',
+                verifiedBy: 'admin1',
+                verifiedAt: serverTimestamp(),
+            }));
         });
-        const dbFacultyB = facultyBContext.firestore();
-        await assertFails(dbFacultyB.collection('sessions').doc('sessionX').collection('attendance').doc('studentA').set({
-            present: true
-        }));
+
+        it('denies admin approval without stamping verifiedBy/verifiedAt', async () => {
+            const ctx = testEnv.authenticatedContext('admin1', {
+                email: 'admin@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('users').doc('pendingUser').update({
+                status: 'verified',
+            }));
+        });
+
+        it('denies non-admin from approving users', async () => {
+            const ctx = testEnv.authenticatedContext('faculty1', {
+                email: 'fac1@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('users').doc('pendingUser').update({
+                status: 'verified',
+                verifiedBy: 'faculty1',
+                verifiedAt: serverTimestamp(),
+            }));
+        });
+
+        it('denies admin from modifying another admin doc', async () => {
+            await testEnv.withSecurityRulesDisabled(async (context) => {
+                await context.firestore().collection('users').doc('admin2').set({
+                    name: 'Second Admin',
+                    email: 'admin2@ch.amrita.edu',
+                    role: 'admin',
+                    status: 'verified',
+                    createdAt: new Date(),
+                });
+            });
+
+            const ctx = testEnv.authenticatedContext('admin1', {
+                email: 'admin@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('users').doc('admin2').update({
+                status: 'suspended',
+                verifiedBy: 'admin1',
+                verifiedAt: serverTimestamp(),
+            }));
+        });
     });
 
-    it('Unverified user is blocked from sessions reads', async () => {
-        const unverifiedContext = testEnv.authenticatedContext('studentA', { email_verified: false }); // Unverified token
-        const db = unverifiedContext.firestore();
+    // ── Suite 4: Email Verification Gate ─────────────────────────────────────
+    describe('4. Unverified Email Access Denial', () => {
+        it('allows unverified user to read their own profile', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: false,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('users').doc('student1').get());
+        });
 
-        await assertFails(db.collection('sessions').doc('sessionX').get());
+        it('denies unverified user from reading courses', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: false,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('courses').doc('CSE450').get());
+        });
     });
 
-    it('User creation fails if status != pending_verification or if email domain doesn\'t match role', async () => {
-        const newStudentContext = testEnv.authenticatedContext('studentNew', { email: 'new@ch.students.amrita.edu', email_verified: false });
-        const db = newStudentContext.firestore();
+    // ── Suite 5: Course & Enrollment CRUD ────────────────────────────────────
+    describe('5. Courses and Enrollments Scoping', () => {
+        it('allows admin to create courses', async () => {
+            const ctx = testEnv.authenticatedContext('admin1', {
+                email: 'admin@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('courses').doc('CSE401').set({
+                code: '19CSE401',
+                title: 'Distributed Systems',
+                room: 'Lab 3',
+                facultyIds: ['faculty1'],
+            }));
+        });
 
-        // 1. Success matching exact role and status
-        await assertSucceeds(db.collection('users').doc('studentNew').set({
-            role: 'student',
-            email: 'new@ch.students.amrita.edu',
-            status: 'pending_verification',
-            name: 'Bob',
-            rollNo: '123'
-        }));
+        it('denies faculty from creating courses', async () => {
+            const ctx = testEnv.authenticatedContext('faculty1', {
+                email: 'fac1@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('courses').doc('CSE999').set({
+                code: '19CSE999',
+                title: 'Hacked Course',
+                room: 'Room 101',
+                facultyIds: ['faculty1'],
+            }));
+        });
 
-        // 2. Failure: status is not pending_verification (e.g. they forge "verified")
-        const badStatusContext = testEnv.authenticatedContext('studentBadStats', { email: 'bad@ch.students.amrita.edu' });
-        await assertFails(badStatusContext.firestore().collection('users').doc('studentBadStats').set({
-            role: 'student',
-            email: 'bad@ch.students.amrita.edu',
-            status: 'verified',
-            name: 'Bob',
-            rollNo: '123'
-        }));
+        it('allows assigned faculty to read course', async () => {
+            const ctx = testEnv.authenticatedContext('faculty1', {
+                email: 'fac1@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('courses').doc('CSE450').get());
+        });
 
-        // 3. Failure: email domain does not match role (Student role with Faculty email)
-        const badRoleContext = testEnv.authenticatedContext('facultyBadRole', { email: 'faculty@ch.amrita.edu' });
-        await assertFails(badRoleContext.firestore().collection('users').doc('facultyBadRole').set({
-            role: 'student',
-            email: 'faculty@ch.amrita.edu',
-            status: 'pending_verification',
-            name: 'Bob',
-            rollNo: '123'
-        }));
-
-        // 4. Failure: Student email lacks correct domain completely
-        const gmailContext = testEnv.authenticatedContext('studentGmail', { email: 'bob@gmail.com' });
-        await assertFails(gmailContext.firestore().collection('users').doc('studentGmail').set({
-            role: 'student',
-            email: 'bob@gmail.com',
-            status: 'pending_verification',
-            name: 'Bob',
-            rollNo: '123'
-        }));
-    });
-    it('Client CANNOT forge verifiedBy or verifiedAt on creation', async () => {
-        const studentContext = testEnv.authenticatedContext('studentForge', { email: 'forge@ch.students.amrita.edu' });
-        const db = studentContext.firestore();
-
-        // Attempting to set verifiedBy on creation must fail
-        await assertFails(db.collection('users').doc('studentForge').set({
-            role: 'student',
-            email: 'forge@ch.students.amrita.edu',
-            status: 'pending_verification',
-            verifiedBy: 'adminA',
-            name: 'Bob',
-            rollNo: '123'
-        }));
-
-        // Attempting to set verifiedAt on creation must fail
-        await assertFails(db.collection('users').doc('studentForge').set({
-            role: 'student',
-            email: 'forge@ch.students.amrita.edu',
-            status: 'pending_verification',
-            verifiedAt: new Date().toISOString(),
-            name: 'Bob',
-            rollNo: '123'
-        }));
+        it('denies unassigned faculty from reading course', async () => {
+            const ctx = testEnv.authenticatedContext('faculty2', {
+                email: 'fac2@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('courses').doc('CSE450').get());
+        });
     });
 
-    it('Client CANNOT update status, role, verifiedBy, or verifiedAt on update', async () => {
-        const studentAContext = testEnv.authenticatedContext('studentA', { email_verified: true });
-        const db = studentAContext.firestore();
+    // ── Suite 6: Session Creation ────────────────────────────────────────────
+    describe('6. Faculty Attendance Session Creation', () => {
+        it('allows faculty to create session for their assigned course (<= 30 min)', async () => {
+            const ctx = testEnv.authenticatedContext('faculty1', {
+                email: 'fac1@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            const endsAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
-        // 1. Attempting to elevate status to verified must fail
-        await assertFails(db.collection('users').doc('studentA').update({
-            status: 'verified'
-        }));
+            await assertSucceeds(db.collection('sessions').doc('session1').set({
+                courseId: 'CSE450',
+                facultyId: 'faculty1',
+                startedAt: serverTimestamp(),
+                endsAt: endsAt,
+                status: 'open',
+            }));
+        });
 
-        // 2. Attempting to escalate role to faculty/admin must fail
-        await assertFails(db.collection('users').doc('studentA').update({
-            role: 'admin'
-        }));
+        it('denies faculty creating session for unassigned course', async () => {
+            const ctx = testEnv.authenticatedContext('faculty2', {
+                email: 'fac2@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            const endsAt = new Date(Date.now() + 15 * 60 * 1000);
 
-        // 3. Attempting to forge verifiedBy must fail
-        await assertFails(db.collection('users').doc('studentA').update({
-            verifiedBy: 'adminA'
-        }));
+            await assertFails(db.collection('sessions').doc('sessionBadCourse').set({
+                courseId: 'CSE450',
+                facultyId: 'faculty2',
+                startedAt: serverTimestamp(),
+                endsAt: endsAt,
+                status: 'open',
+            }));
+        });
 
-        // 4. Updating display name or photoUrl succeeds
-        await assertSucceeds(db.collection('users').doc('studentA').update({
-            name: 'Arun Updated'
-        }));
+        it('denies session creation with duration > 30 minutes', async () => {
+            const ctx = testEnv.authenticatedContext('faculty1', {
+                email: 'fac1@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            const endsAt = new Date(Date.now() + 45 * 60 * 1000); // 45 mins > 30 min limit
+
+            await assertFails(db.collection('sessions').doc('sessionTooLong').set({
+                courseId: 'CSE450',
+                facultyId: 'faculty1',
+                startedAt: serverTimestamp(),
+                endsAt: endsAt,
+                status: 'open',
+            }));
+        });
     });
 
-    it('Admin client CANNOT directly update user status in Firestore (must use backend API)', async () => {
-        const adminContext = testEnv.authenticatedContext('adminA', { email_verified: true });
-        const db = adminContext.firestore();
+    // ── Suite 7: Live Nonce Rotation Subcollection ───────────────────────────
+    describe('7. Rotating Beacon Secrets (sessions/{sid}/live/current)', () => {
+        beforeEach(async () => {
+            await testEnv.withSecurityRulesDisabled(async (context) => {
+                const db = context.firestore();
+                const now = new Date();
+                await db.collection('sessions').doc('sessionOpen').set({
+                    courseId: 'CSE450',
+                    facultyId: 'faculty1',
+                    startedAt: now,
+                    endsAt: new Date(now.getTime() + 20 * 60 * 1000),
+                    status: 'open',
+                });
+            });
+        });
 
-        // Admin attempting client-side direct write to student status must fail
-        await assertFails(db.collection('users').doc('studentA').update({
-            status: 'verified',
-            verifiedBy: 'adminA'
-        }));
+        it('allows faculty owner to write rotating 8-hex code', async () => {
+            const ctx = testEnv.authenticatedContext('faculty1', {
+                email: 'fac1@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('sessions').doc('sessionOpen').collection('live').doc('current').set({
+                code: 'a1b2c3d4',
+                prevCode: '00000000',
+                rotatedAt: serverTimestamp(),
+            }));
+        });
+
+        it('denies student reading live/current secret document', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('sessions').doc('sessionOpen').collection('live').doc('current').get());
+        });
+
+        it('denies non-owner faculty from writing live/current', async () => {
+            const ctx = testEnv.authenticatedContext('faculty2', {
+                email: 'fac2@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('sessions').doc('sessionOpen').collection('live').doc('current').set({
+                code: 'deadbeef',
+                rotatedAt: serverTimestamp(),
+            }));
+        });
+    });
+
+    // ── Suite 8: Student Check-in Verification ───────────────────────────────
+    describe('8. Student Check-in Verification (sessions/{sid}/attendance/{uid})', () => {
+        beforeEach(async () => {
+            await testEnv.withSecurityRulesDisabled(async (context) => {
+                const db = context.firestore();
+                const now = new Date();
+                await db.collection('sessions').doc('sessionOpen').set({
+                    courseId: 'CSE450',
+                    facultyId: 'faculty1',
+                    startedAt: now,
+                    endsAt: new Date(now.getTime() + 20 * 60 * 1000),
+                    status: 'open',
+                });
+
+                await db.collection('sessions').doc('sessionOpen').collection('live').doc('current').set({
+                    code: '12345678',
+                    prevCode: '87654321',
+                    rotatedAt: now,
+                });
+            });
+        });
+
+        it('allows student to check in with current valid code, matching deviceId and RSSI in range', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
+                studentUid: 'student1',
+                markedAt: serverTimestamp(),
+                method: 'ble',
+                code: '12345678',
+                rssi: -65,
+                deviceId: 'device-uuid-stu1',
+            }));
+        });
+
+        it('allows student to check in with valid prevCode during grace period', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
+                studentUid: 'student1',
+                markedAt: serverTimestamp(),
+                method: 'ble',
+                code: '87654321',
+                rssi: -70,
+                deviceId: 'device-uuid-stu1',
+            }));
+        });
+
+        it('denies check-in with invalid/expired nonce code', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
+                studentUid: 'student1',
+                markedAt: serverTimestamp(),
+                method: 'ble',
+                code: '99999999', // wrong code
+                rssi: -65,
+                deviceId: 'device-uuid-stu1',
+            }));
+        });
+
+        it('denies check-in with mismatched deviceId', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
+                studentUid: 'student1',
+                markedAt: serverTimestamp(),
+                method: 'ble',
+                code: '12345678',
+                rssi: -65,
+                deviceId: 'wrong-friend-device-id',
+            }));
+        });
+
+        it('denies check-in for unenrolled student', async () => {
+            const ctx = testEnv.authenticatedContext('student2', {
+                email: 'stu2@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student2').set({
+                studentUid: 'student2',
+                markedAt: serverTimestamp(),
+                method: 'ble',
+                code: '12345678',
+                rssi: -65,
+                deviceId: 'device-uuid-stu2',
+            }));
+        });
+    });
+
+    // ── Suite 9: Faculty Manual Override ─────────────────────────────────────
+    describe('9. Faculty Manual Override', () => {
+        beforeEach(async () => {
+            await testEnv.withSecurityRulesDisabled(async (context) => {
+                const db = context.firestore();
+                const now = new Date();
+                await db.collection('sessions').doc('sessionOpen').set({
+                    courseId: 'CSE450',
+                    facultyId: 'faculty1',
+                    startedAt: now,
+                    endsAt: new Date(now.getTime() + 20 * 60 * 1000),
+                    status: 'open',
+                });
+            });
+        });
+
+        it('allows owning faculty to manually mark enrolled student with reason', async () => {
+            const ctx = testEnv.authenticatedContext('faculty1', {
+                email: 'fac1@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
+                studentUid: 'student1',
+                markedAt: serverTimestamp(),
+                method: 'manual',
+                markedBy: 'faculty1',
+                reason: 'Student present but Bluetooth radio damaged',
+            }));
+        });
+
+        it('denies manual override without required reason', async () => {
+            const ctx = testEnv.authenticatedContext('faculty1', {
+                email: 'fac1@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
+                studentUid: 'student1',
+                markedAt: serverTimestamp(),
+                method: 'manual',
+                markedBy: 'faculty1',
+            }));
+        });
+
+        it('denies non-owning faculty manual override', async () => {
+            const ctx = testEnv.authenticatedContext('faculty2', {
+                email: 'fac2@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
+                studentUid: 'student1',
+                markedAt: serverTimestamp(),
+                method: 'manual',
+                markedBy: 'faculty2',
+                reason: 'Attempted override by other faculty',
+            }));
+        });
+    });
+
+    // ── Suite 10: Collection Group History ───────────────────────────────────
+    describe('10. Collection-Group Attendance History', () => {
+        beforeEach(async () => {
+            await testEnv.withSecurityRulesDisabled(async (context) => {
+                const db = context.firestore();
+                const now = new Date();
+                await db.collection('sessions').doc('sessA').collection('attendance').doc('student1').set({
+                    studentUid: 'student1',
+                    markedAt: now,
+                    method: 'ble',
+                    code: '12345678',
+                    rssi: -60,
+                });
+                await db.collection('sessions').doc('sessA').collection('attendance').doc('student2').set({
+                    studentUid: 'student2',
+                    markedAt: now,
+                    method: 'ble',
+                    code: '12345678',
+                    rssi: -62,
+                });
+            });
+        });
+
+        it('allows student to query their own collection-group attendance rows', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(
+                db.collectionGroup('attendance').where('studentUid', '==', 'student1').get()
+            );
+        });
+
+        it('denies student querying other students rows in collection-group', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(
+                db.collectionGroup('attendance').where('studentUid', '==', 'student2').get()
+            );
+        });
+    });
+
+    // ── Suite 11: Default Deny ───────────────────────────────────────────────
+    describe('11. Default Deny On Unknown Paths', () => {
+        it('denies writes to unknown top-level collection', async () => {
+            const ctx = testEnv.authenticatedContext('student1', {
+                email: 'stu1@ch.students.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('audit_logs').doc('log1').set({
+                action: 'hack',
+            }));
+        });
+
+        it('denies reads from unknown top-level collection', async () => {
+            const ctx = testEnv.authenticatedContext('admin1', {
+                email: 'admin@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertFails(db.collection('secret_audit').doc('log1').get());
+        });
     });
 });

@@ -1,54 +1,92 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Represents a faculty-created attendance session (5-10 min window).
 class AttendanceSession {
-  final String sessionId;
-  final String classId;
-  final String subjectName;
+  final String id;
+  final String courseId;
   final String facultyId;
-  final DateTime startTime;
-  final DateTime endTime;
-  final String status; // 'active', 'closed', 'expired'
-  final String hmacSecret; // server-side secret for token rotation
+  final DateTime startedAt;
+  final DateTime endsAt;
+  final String status; // 'open' or 'closed'
 
-  AttendanceSession({
-    required this.sessionId,
-    required this.classId,
-    required this.subjectName,
+  const AttendanceSession({
+    required this.id,
+    required this.courseId,
     required this.facultyId,
-    required this.startTime,
-    required this.endTime,
+    required this.startedAt,
+    required this.endsAt,
     required this.status,
-    required this.hmacSecret,
   });
 
-  factory AttendanceSession.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  bool get isOpen => status == 'open' && DateTime.now().isBefore(endsAt);
+  bool get isClosed => !isOpen;
+
+  int get remainingSeconds {
+    if (!isOpen) return 0;
+    final diff = endsAt.difference(DateTime.now()).inSeconds;
+    return diff > 0 ? diff : 0;
+  }
+
+  factory AttendanceSession.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    final rawStart = data['startedAt'];
+    final rawEnd = data['endsAt'];
+
+    DateTime started = DateTime.now();
+    DateTime ends = DateTime.now().add(const Duration(minutes: 15));
+
+    if (rawStart is Timestamp) started = rawStart.toDate();
+    if (rawEnd is Timestamp) ends = rawEnd.toDate();
+
     return AttendanceSession(
-      sessionId: doc.id,
-      classId: data['classId'] ?? '',
-      subjectName: data['subjectName'] ?? '',
-      facultyId: data['facultyId'] ?? '',
-      startTime: (data['startTime'] as Timestamp).toDate(),
-      endTime: (data['endTime'] as Timestamp).toDate(),
-      status: data['status'] ?? 'closed',
-      hmacSecret: data['hmacSecret'] ?? '',
+      id: doc.id,
+      courseId: data['courseId'] as String? ?? '',
+      facultyId: data['facultyId'] as String? ?? '',
+      startedAt: started,
+      endsAt: ends,
+      status: data['status'] as String? ?? 'closed',
     );
   }
 
-  Map<String, dynamic> toFirestore() => {
-        'classId': classId,
-        'subjectName': subjectName,
-        'facultyId': facultyId,
-        'startTime': Timestamp.fromDate(startTime),
-        'endTime': Timestamp.fromDate(endTime),
-        'status': status,
-        'hmacSecret': hmacSecret,
-      };
+  Map<String, dynamic> toMap() {
+    return {
+      'courseId': courseId,
+      'facultyId': facultyId,
+      'startedAt': Timestamp.fromDate(startedAt),
+      'endsAt': Timestamp.fromDate(endsAt),
+      'status': status,
+    };
+  }
+}
 
-  bool get isActive => status == 'active' && DateTime.now().isBefore(endTime);
+class LiveSessionCurrent {
+  final String code;
+  final String? prevCode;
+  final DateTime rotatedAt;
 
-  /// Remaining seconds in this window.
-  int get remainingSeconds =>
-      isActive ? endTime.difference(DateTime.now()).inSeconds : 0;
+  const LiveSessionCurrent({
+    required this.code,
+    this.prevCode,
+    required this.rotatedAt,
+  });
+
+  factory LiveSessionCurrent.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    final rawRotated = data['rotatedAt'];
+    DateTime rotated = DateTime.now();
+    if (rawRotated is Timestamp) rotated = rawRotated.toDate();
+
+    return LiveSessionCurrent(
+      code: data['code'] as String? ?? '',
+      prevCode: data['prevCode'] as String?,
+      rotatedAt: rotated,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'code': code,
+      if (prevCode != null) 'prevCode': prevCode,
+      'rotatedAt': Timestamp.fromDate(rotatedAt),
+    };
+  }
 }

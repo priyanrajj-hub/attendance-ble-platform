@@ -13,18 +13,21 @@
           "order": "ASCENDING"
         }
       ]
-    }
-  ],
-  "fieldOverrides": [
+    },
     {
       "collectionGroup": "attendance",
-      "fieldPath": "markedAt",
-      "indexes": [
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
         {
-          "order": "DESCENDING",
-          "queryScope": "COLLECTION_GROUP"
+          "fieldPath": "studentUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "markedAt",
+          "order": "DESCENDING"
         }
       ]
     }
-  ]
+  ],
+  "fieldOverrides": []
 }
