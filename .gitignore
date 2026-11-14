@@ -1,88 +1,68 @@
-# === Repository Exclusions & Environment Vault Security ===
-# === Flutter / Dart ===
+# Flutter / Dart
 .dart_tool/
-.packages
-.pub/
-.pub-cache/
-build/
-*.iml
 .flutter-plugins
 .flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+android/build/
+*.iml
+**/GeneratedPluginRegistrant.*
 
-# === IDE & OS ===
-.idea/
-.vscode/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-
-# === Android ===
+# Android
 android/.gradle/
 android/local.properties
-**/GeneratedPluginRegistrant.*
-*.apk
-*.aab
-android/app/google-services.json
+android/key.properties
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/**/.cxx/
+*.jks
+*.keystore
 
-# === iOS ===
+# iOS
 ios/Pods/
 ios/.symlinks/
 ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
 ios/Runner/GoogleService-Info.plist
+android/app/google-services.json
 
-# === Firebase & Logs ===
-.firebase/
+# Build outputs and logs
+*.apk
+*.aab
+*.log
+*.bak
 firebase-debug.log*
 firestore-debug.log*
 ui-debug.log*
-pubsub-debug.log*
-database-debug.log*
-*.log
-*.bak
+.firebase/
 
-# === Node / npm ===
+# Node (firestore-tests)
 node_modules/
-.npm
-.eslintcache
-*.tgz
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# === Secrets & Environment Protection (Strict Zero-Leak) ===
+# Secrets (templates stay tracked)
 .env
 .env.*
-*.env
-.env.example
-*.env.example
+!.env.example
 secrets/
 credentials/
-*.key
 *.pem
 *.p12
-*.jks
-*.keystore
+*serviceAccount*.json
 *firebase-admin*.json
-*serviceAccountKey*.json
 
-# === Test, Data & Audit Misc ===
+# IDE / OS / AI tooling
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.gemini/
 coverage/
-users.json
-firebase-test.json
-audit_report.*
-audit_*.json
-*.patch
-*.diff
-
-# === Python & Data Engineering ===
+.agents/
+.claude/
 __pycache__/
 *.pyc
-.venv/
-backend/.venv/
-.pytest_cache/
-spark-warehouse/
-metastore_db/
-derby.log
-data/telemetry/raw/
-data/parquet/
+
