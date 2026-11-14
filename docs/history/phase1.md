@@ -15,7 +15,7 @@ Your repo contains the Dart source code but not the platform folders. Run this
 once from the project root to generate `android/`, `ios/`, `web/`, `test/`, etc.:
 
 ```bash
-flutter create . --project-name attendance_ble_test --org com.example
+flutter create . --project-name amrita_ble_attendance --org com.example
 ```
 
 > **Note:** This will NOT overwrite your existing `lib/` files or `pubspec.yaml`.

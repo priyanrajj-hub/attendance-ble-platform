@@ -114,7 +114,7 @@ final uidBytes = utf8.encode(
    - Select the API key used by Firebase.
    - Under **Application restrictions**, select **Android apps**.
    - Add an allowed item with:
-     - Package Name: `com.attendance.ble.attendance_ble_test`
+     - Package Name: `com.attendance.ble.amrita_ble_attendance`
      - SHA-1 Certificate Fingerprint: Add your debug keystore SHA-1 AND release keystore SHA-1.
 2. **Restrict Key by API Scope**:
    - Under **API restrictions**, select **Restrict key**.
