@@ -134,5 +134,26 @@ void main() {
       broadcaster.dispose();
       scanner.dispose();
     });
+
+    test('CodeRotator enforces non-empty sessionId and sessionSecret', () {
+      final broadcaster = _FakeBeaconBroadcaster();
+      expect(
+        () => CodeRotator(
+          sessionId: '',
+          sessionSecret: 'secret_123',
+          broadcaster: broadcaster,
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+      expect(
+        () => CodeRotator(
+          sessionId: 'session_123',
+          sessionSecret: '',
+          broadcaster: broadcaster,
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+      broadcaster.dispose();
+    });
   });
 }

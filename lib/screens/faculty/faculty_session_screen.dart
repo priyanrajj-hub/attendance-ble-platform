@@ -57,29 +57,90 @@ class _FacultySessionScreenState extends ConsumerState<FacultySessionScreen> {
     });
 
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      setState(() {
+        _isCreatingSession = false;
+        _errorMessage = 'Authentication required. Please sign in again.';
+      });
+      return;
+    }
 
     try {
-      // 1. Check if there is an existing open session for this course by this faculty
-      final existingQuery = await FirebaseFirestore.instance
-          .collection('sessions')
-          .where('courseId', isEqualTo: widget.courseId)
-          .where('facultyId', isEqualTo: user.uid)
-          .where('status', isEqualTo: 'open')
-          .limit(1)
-          .get();
+      // 1. Authoritative Backend Session Creation (PostgreSQL MUST be the sole authority)
+      final apiService = ref.read(attendanceApiServiceProvider);
+      final apiSession = await apiService.startSession(
+        courseId: widget.courseId,
+        roomLabel: 'Classroom',
+        durationMinutes: 30,
+        rssiThreshold: -75,
+      );
 
-      AttendanceSession session;
-      if (existingQuery.docs.isNotEmpty) {
-        session = AttendanceSession.fromDoc(existingQuery.docs.first);
-        if (session.isClosed) {
-          // If expired, close it in Firestore and create a new session
-          await existingQuery.docs.first.reference.update({'status': 'closed'});
-          session = await _createNewSession(user.uid);
-        }
-      } else {
-        session = await _createNewSession(user.uid);
+      if (apiSession == null) {
+        if (!mounted) return;
+        setState(() {
+          _isCreatingSession = false;
+          _errorMessage =
+              'Failed to start authoritative attendance session on backend server. Cannot broadcast attendance without cryptographic verification token.';
+        });
+        return;
       }
+
+      final backendSessionId = apiSession['id'] as String?;
+      final sessionSecret = apiSession['ephemeral_token'] as String?;
+      if (backendSessionId == null || sessionSecret == null || sessionSecret.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _isCreatingSession = false;
+          _errorMessage =
+              'Backend session returned invalid session parameters. Cryptographic session ID and secret are mandatory.';
+        });
+        return;
+      }
+
+      // 2. Parse timestamps from backend
+      final now = DateTime.now();
+      DateTime endsAt = now.add(const Duration(minutes: 30));
+      if (apiSession['closes_at'] != null) {
+        final parsedClosesAt = DateTime.tryParse(apiSession['closes_at'] as String);
+        if (parsedClosesAt != null) {
+          endsAt = parsedClosesAt.toLocal();
+        }
+      }
+
+      // 3. Close any stale previously open sessions in Firestore projection for this course
+      try {
+        final staleSessions = await FirebaseFirestore.instance
+            .collection('sessions')
+            .where('courseId', isEqualTo: widget.courseId)
+            .where('facultyId', isEqualTo: user.uid)
+            .where('status', isEqualTo: 'open')
+            .get();
+        for (final doc in staleSessions.docs) {
+          if (doc.id != backendSessionId) {
+            await doc.reference.update({'status': 'closed'});
+          }
+        }
+      } catch (_) {}
+
+      // 4. Project PostgreSQL session into Firestore using the EXACT backend session ID
+      final docRef = FirebaseFirestore.instance.collection('sessions').doc(backendSessionId);
+      await docRef.set({
+        'courseId': widget.courseId,
+        'facultyId': user.uid,
+        'startedAt': FieldValue.serverTimestamp(),
+        'endsAt': Timestamp.fromDate(endsAt),
+        'status': 'open',
+        'backendSessionId': backendSessionId,
+      }, SetOptions(merge: true));
+
+      final session = AttendanceSession(
+        id: backendSessionId,
+        courseId: widget.courseId,
+        facultyId: user.uid,
+        startedAt: now,
+        endsAt: endsAt,
+        status: 'open',
+      );
 
       if (!mounted) return;
       setState(() {
@@ -88,25 +149,16 @@ class _FacultySessionScreenState extends ConsumerState<FacultySessionScreen> {
         _isCreatingSession = false;
       });
 
-      // 2. Start authoritative backend session and initialize CodeRotator
-      final apiService = ref.read(attendanceApiServiceProvider);
-      final apiSession = await apiService.startSession(
-        courseId: widget.courseId,
-        roomLabel: 'Classroom',
-        durationMinutes: 30,
-        rssiThreshold: -75,
-      );
-      final sessionSecret = apiSession?['ephemeral_token'] as String?;
-
+      // 5. Start CodeRotator with Authoritative Session ID and Mandatory Secret
       _codeRotator?.dispose();
       _codeRotator = CodeRotator(
-        sessionId: session.id,
+        sessionId: backendSessionId,
         sessionSecret: sessionSecret,
         broadcaster: _broadcaster!,
       );
       await _codeRotator!.start();
 
-      // 3. Start timer
+      // 6. Start countdown timer
       _countdownTimer?.cancel();
       _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (!mounted) {
@@ -128,29 +180,6 @@ class _FacultySessionScreenState extends ConsumerState<FacultySessionScreen> {
         });
       }
     }
-  }
-
-  Future<AttendanceSession> _createNewSession(String facultyUid) async {
-    final now = DateTime.now();
-    final endsAt = now.add(const Duration(minutes: 15)); // 15-minute standard class window
-
-    final docRef = FirebaseFirestore.instance.collection('sessions').doc();
-    await docRef.set({
-      'courseId': widget.courseId,
-      'facultyId': facultyUid,
-      'startedAt': FieldValue.serverTimestamp(),
-      'endsAt': Timestamp.fromDate(endsAt),
-      'status': 'open',
-    });
-
-    return AttendanceSession(
-      id: docRef.id,
-      courseId: widget.courseId,
-      facultyId: facultyUid,
-      startedAt: now,
-      endsAt: endsAt,
-      status: 'open',
-    );
   }
 
   Future<void> _closeSession() async {

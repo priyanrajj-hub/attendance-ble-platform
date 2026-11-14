@@ -16,7 +16,7 @@ enum BeaconHealth {
 
 class CodeRotator {
   final String sessionId;
-  final String? sessionSecret;
+  final String sessionSecret;
   final BeaconBroadcaster _broadcaster;
   final FirebaseFirestore _firestore;
 
@@ -32,10 +32,12 @@ class CodeRotator {
 
   CodeRotator({
     required this.sessionId,
-    this.sessionSecret,
+    required this.sessionSecret,
     required BeaconBroadcaster broadcaster,
     FirebaseFirestore? firestore,
-  })  : _broadcaster = broadcaster,
+  })  : assert(sessionId.isNotEmpty, 'Session ID must not be empty'),
+        assert(sessionSecret.isNotEmpty, 'Session secret must not be empty'),
+        _broadcaster = broadcaster,
         _firestore = firestore ?? FirebaseFirestore.instance {
     _healthController.add(_health);
   }
@@ -80,15 +82,12 @@ class CodeRotator {
   }
 
   String _deriveNextChallenge() {
-    if (sessionSecret != null && sessionSecret!.isNotEmpty) {
-      final step = ChallengeCrypto.currentStep();
-      return ChallengeCrypto.computeChallenge(
-        sessionSecret: sessionSecret!,
-        sessionId: sessionId,
-        step: step,
-      );
-    }
-    return generate8HexCode();
+    final step = ChallengeCrypto.currentStep();
+    return ChallengeCrypto.computeChallenge(
+      sessionSecret: sessionSecret,
+      sessionId: sessionId,
+      step: step,
+    );
   }
 
   Future<void> _rotateAndAdvertise() async {
