@@ -22,7 +22,7 @@ class FlutterBlePeripheralBroadcaster implements BeaconBroadcaster {
     try {
       final isSupported = await _peripheral.isSupported;
       if (!isSupported) {
-        final err = UnsupportedFailure();
+        final err = const UnsupportedFailure();
         _failureController.add(err);
         throw err;
       }

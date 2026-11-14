@@ -132,7 +132,7 @@ class _AdminApprovalScreenState extends ConsumerState<AdminApprovalScreen> with 
     final roomCtrl = TextEditingController();
     final facultyUidCtrl = TextEditingController();
 
-    await showDialog(
+    await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Create New Course'),
@@ -188,7 +188,7 @@ class _AdminApprovalScreenState extends ConsumerState<AdminApprovalScreen> with 
     final studentNameCtrl = TextEditingController();
     final rollNoCtrl = TextEditingController();
 
-    await showDialog(
+    await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Enroll Student in Course'),
