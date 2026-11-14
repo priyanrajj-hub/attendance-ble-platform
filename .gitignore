@@ -1,110 +1,246 @@
-# =========================
-# Flutter / Dart
-# =========================
+# ==============================================================================
+# AMRITA ATTENDANCE PLATFORM - MASTER GITIGNORE CONFIGURATION
+# Hardened DevSecOps Specification for Multi-Tier Mobile & Backend Architecture
+# ==============================================================================
 
+# ------------------------------------------------------------------------------
+# 1. Environment & Configuration Files (Secrets Protection)
+# ------------------------------------------------------------------------------
+.env
+.env.*
+*.env
+.env.local
+.env.development
+.env.production
+.env.test
+.env.staging
+.env.backup
+.env.bak
+env/.env*
+backend/env/.env*
+
+# Explicit preservation of template examples
+!.env.example
+!**/.env.example
+
+# ------------------------------------------------------------------------------
+# 2. Python & FastAPI Backend
+# ------------------------------------------------------------------------------
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+!env/.env.example
+!backend/env/.env.example
+
+# Testing, typing, and linting caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+nosetests.xml
+
+# ------------------------------------------------------------------------------
+# 3. Flutter & Dart
+# ------------------------------------------------------------------------------
 .dart_tool/
 .packages
 .pub/
 .pub-cache/
-build/
-android/build/
+coverage/
 .flutter-plugins
 .flutter-plugins-dependencies
-*.iml
+*.lock.tmp
 **/GeneratedPluginRegistrant.*
 
-# =========================
-# IDE & OS
-# =========================
+# Always preserve dependency lockfile for reproducible builds
+!pubspec.lock
 
-.idea/
-.vscode/
-.DS_Store
-Thumbs.db
-.gemini/
-.agents/
-.claude/
-coverage/
-
-# =========================
-# Environment variables
-# =========================
-
-.env
-.env.*
-*.env
-env/.env*
-backend/env/.env*
-!.env.example
-!**/.env.example
-.venv/
-backend/.venv/
-
-# =========================
-# Android
-# =========================
-
+# ------------------------------------------------------------------------------
+# 4. Android Security & Build Artifacts
+# ------------------------------------------------------------------------------
 android/.gradle/
 android/local.properties
 android/key.properties
+android/build/
+android/app/build/
+android/.cxx/
+android/**/.cxx/
 android/app/debug/
 android/app/profile/
 android/app/release/
-android/**/.cxx/
+android/captures/
+
+# Sensitive Android keys and configs
 android/app/google-services.json
+!android/app/google-services.json.example
 *.jks
 *.keystore
+*.p12
+*.pfx
+*.apk
+*.aab
+*.dex
+*.class
 
-# =========================
-# iOS
-# =========================
-
+# ------------------------------------------------------------------------------
+# 5. iOS Security & Build Artifacts
+# ------------------------------------------------------------------------------
 ios/Pods/
 ios/.symlinks/
 ios/Flutter/ephemeral/
 ios/Flutter/Generated.xcconfig
 ios/Runner/GoogleService-Info.plist
+*.mobileprovision
+*.provisionprofile
+*.cer
+*.p8
+*.ipa
+ios/**/DerivedData/
+ios/**/xcuserdata/
+ios/**/GeneratedPluginRegistrant.*
 
-# =========================
-# Firebase & Emulator logs
-# =========================
-
+# ------------------------------------------------------------------------------
+# 6. Firebase & Google Cloud Configuration
+# ------------------------------------------------------------------------------
 .firebase/
 firebase-debug.log*
 firestore-debug.log*
 ui-debug.log*
 
-# =========================
-# Node & Dependencies
-# =========================
-
-node_modules/
-npm-debug.log*
-
-# =========================
-# Logs, Symbols & Temp Files
-# =========================
-
-*.log
-*.tmp
-*.bak
-*.apk
-*.aab
-build/symbols/
-__pycache__/
-*.pyc
-backend/data/
-*.parquet
-
-# =========================
-# Secrets & Credentials
-# =========================
-
-secrets/
-credentials/
-credentials.json
+# Cloud & Service Account Credentials
+google-services.json
+GoogleService-Info.plist
 service-account*.json
 *serviceAccount*.json
 *firebase-admin*.json
+firebase-adminsdk*.json
+client_secret*.json
+
+# ------------------------------------------------------------------------------
+# 7. Private Keys & Cryptographic Certificates
+# ------------------------------------------------------------------------------
 *.pem
-*.p12
+*.key
+*.ppk
+*.der
+*.crt
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+known_hosts
+
+# ------------------------------------------------------------------------------
+# 8. Credentials, Secrets & Tokens
+# ------------------------------------------------------------------------------
+secrets/
+credentials/
+private/
+*.secret
+*.credentials
+credentials.json
+secrets.json
+vault.json
+token.json
+tokens.json
+auth_token*
+access_token*
+jwt_secret*
+private_key*
+
+# ------------------------------------------------------------------------------
+# 9. Databases, Dumps & Backups
+# ------------------------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.gz
+*.bak
+*.backup
+*.old
+*.orig
+
+# Explicitly ensure Alembic migrations are NEVER ignored
+!backend/alembic/versions/*.py
+
+# ------------------------------------------------------------------------------
+# 10. Data Engineering & Analytics Lakehouse
+# ------------------------------------------------------------------------------
+*.parquet
+*.arrow
+*.feather
+*.duckdb
+*.wal
+data/
+backend/data/
+lakehouse/
+telemetry/
+exports/
+reports/generated/
+
+# ------------------------------------------------------------------------------
+# 11. System, Logs & Temporary Files
+# ------------------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+*.pid
+*.cache
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+node_modules/
+
+# ------------------------------------------------------------------------------
+# 12. IDE & Local Developer Tooling
+# ------------------------------------------------------------------------------
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.gemini/
+.agents/
+.claude/

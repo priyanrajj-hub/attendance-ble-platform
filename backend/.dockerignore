@@ -1,0 +1,49 @@
+# ==============================================================================
+# BACKEND MICROSERVICE - DOCKER IGNORE
+# ==============================================================================
+
+# Version control
+.git/
+.gitignore
+
+# Environment & credentials
+.env
+.env.*
+*.env
+env/.env*
+!.env.example
+!**/.env.example
+secrets/
+credentials/
+*.pem
+*.key
+*.jks
+*.keystore
+*.p12
+
+# Python artifacts & caches
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+!env/.env.example
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Analytics & database files
+data/
+*.parquet
+*.duckdb
+*.sqlite
+*.sqlite3
+
+# IDE & logs
+.idea/
+.vscode/
+*.tmp
+*.log

@@ -30,3 +30,75 @@
    - Short 20-second rotation window with synchronized HMAC-SHA256 nonces prevents delayed re-broadcasting.
    - Per-student signature binding and unique device enrollment prevent credential sharing.
    - For high-stakes examinations, faculty manual confirmation or two-way BLE challenge-response is required.
+
+---
+
+## 3. Secret Management, Git Hygiene & Credential Governance
+
+### 3.1 Overview
+The Amrita BLE Attendance Platform implements a zero-leakage security posture designed to prevent accidental leakage of database credentials, encryption master keys, Firebase service account keys, mobile signing keystores, and personal institutional data into Git version control.
+
+### 3.2 Master GitIgnore Architecture
+The root `.gitignore` enforces strict exclusions across 12 distinct asset categories:
+1. **Environment Files**: Blocks `.env`, `.env.*`, `*.env`, `backend/env/.env*`, while preserving template files `!.env.example` and `!**/.env.example`.
+2. **Python & FastAPI**: Excludes `__pycache__/`, `*.pyc`, distribution artifacts (`dist/`, `build/`), virtual environments (`.venv/`, `venv/`, `env/`), test/coverage caches (`.pytest_cache/`, `htmlcov/`, `.coverage`).
+3. **Flutter & Dart**: Excludes `.dart_tool/`, `.packages`, `.pub/`, `.pub-cache/`, `build/`, while strictly preserving `pubspec.lock` for reproducible dependency trees.
+4. **Android Security**: Excludes `android/local.properties`, `android/key.properties`, `android/.gradle/`, `.cxx/`, build outputs, debug/release APKs (`*.apk`, `*.aab`), keystores (`*.jks`, `*.keystore`), and `android/app/google-services.json` (preserving only `google-services.json.example`).
+5. **iOS Security**: Excludes `ios/Pods/`, `ios/.symlinks/`, ephemeral Flutter configs, `GoogleService-Info.plist`, provisioning profiles (`*.mobileprovision`), and signing certificates (`*.p12`, `*.cer`, `*.p8`).
+6. **Firebase & Cloud Credentials**: Excludes `service-account*.json`, `*firebase-admin*.json`, GCP client secrets, and Firebase emulator debug logs.
+7. **Private Keys & TLS Certificates**: Excludes `*.pem`, `*.key`, `*.ppk`, `*.der`, `*.crt`, `id_rsa`, `id_ed25519`.
+8. **Secrets & Vault Files**: Excludes `secrets/`, `credentials/`, `*.secret`, `vault.json`, `token.json`, and API token dumps.
+9. **Databases & Backups**: Excludes `*.db`, `*.sqlite`, `*.sqlite3`, `*.dump`, `*.sql.gz`, `*.bak`, while strictly preserving Alembic database migration scripts in `backend/alembic/versions/*.py`.
+10. **Data Lakehouse & Telemetry**: Excludes `*.parquet`, `*.arrow`, `*.feather`, `*.duckdb`, `*.wal`, and the `backend/data/` analytics partitions.
+11. **System & Temporary Files**: Excludes `*.log`, `npm-debug.log*`, `*.tmp`, `*.swp`, OS metadata (`.DS_Store`, `Thumbs.db`).
+12. **IDE & Local Tooling**: Excludes `.idea/`, `.vscode/`, `*.iml`, `.gemini/`, `.agents/`, `.claude/`.
+
+Complementing `.gitignore`, root `.dockerignore` and `backend/.dockerignore` prevent build contexts from packaging secrets, virtual environments, or development artifacts into container layers.
+
+### 3.3 Environment Configuration & Local Setup
+Developers must configure local environments using template files:
+```bash
+# 1. Clone repository
+git clone https://github.com/priyanrajj-hub/attendance-ble-platform.git
+cd attendance-ble-platform
+
+# 2. Instantiate root and backend environment configurations
+cp .env.example .env
+cp backend/.env.example backend/.env
+
+# 3. Generate high-entropy secret keys for AES-256-GCM envelope encryption
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+#### Required Environment Variables
+| Variable | Scope | Description | Production Source |
+|---|---|---|---|
+| `DATABASE_URL` | Backend | Async PostgreSQL connection string (`postgresql+asyncpg://...`) | Cloud SQL / Secret Manager |
+| `SYNC_DATABASE_URL` | Backend | Sync PostgreSQL connection string for Alembic migrations | Cloud SQL / Secret Manager |
+| `SECRET_KEY` | Backend | Master key for AES-256-GCM session secrets & HMAC validation | KMS / Secret Manager |
+| `FIREBASE_PROJECT_ID` | Multi-tier | Google Cloud / Firebase project identifier | App Configuration / CI Secret |
+| `FIREBASE_SERVICE_ACCOUNT_PATH` | Backend | Absolute path to backend GCP service account JSON key | Mounted secret volume / KMS |
+| `BLE_NAMESPACE_HEX` | Mobile/Backend | Hex-encoded 10-byte BLE Eddystone namespace filter | App Configuration |
+| `BLE_ROTATION_INTERVAL_SECONDS` | Mobile/Backend | Synchronized epoch rotation step size (default: 20s) | App Configuration |
+| `BLE_RSSI_CHECKIN_THRESHOLD_DBM` | Mobile/Backend | Maximum allowable signal attenuation (default: -80 dBm) | App Configuration |
+| `HUGGINGFACE_API_TOKEN` | Backend | Optional API token for institutional AI agent analytics | Secret Manager |
+
+### 3.4 Production Secret Management & CI/CD Governance
+- **Zero Hardcoded Secrets**: In production, environment variables must never be baked into container images or checked into source code. Inject them at container runtime via Kubernetes Secrets, Google Cloud Run Secret Mounts, or AWS Secrets Manager.
+- **GitHub Actions Least Privilege**:
+  - The CI workflow declares top-level `permissions: contents: read` to prevent malicious PRs from modifying repository contents or creating releases.
+  - Production deployments use scoped GitHub Environment Secrets with mandatory reviewer approval.
+- **Automated Secret Scanning (Gitleaks)**:
+  - Gitleaks v8 is integrated into `.github/workflows/ci.yml` with `fetch-depth: 0` to scan entire Git commit trees on every push and pull request.
+  - Repository-level `.gitleaks.toml` defines cryptographic test vector allowlists and public client SDK exceptions with surgical precision.
+
+### 3.5 Security Disclosure & Remediation: Historical Commit `bfb74bd88fa6df006fb40216a2b140faa83cde27`
+- **Audit Finding**: In early commit `bfb74bd88fa6df006fb40216a2b140faa83cde27` (dated 2026-07-25), an unencrypted `android/app/google-services.json` was tracked in git before being removed from the working tree in commit `4c0415f`.
+- **Compensating Security Controls**:
+  1. Client-side Firestore rules now enforce `allow write: if false;`, eliminating the ability for an attacker with the Firebase API key to forge attendance records directly.
+  2. The Google Cloud API key (`AIza...`) embedded in client configs is public-facing by design in Firebase Android architectures and is intended only for client identification.
+- **Required Production Remediation Checklist**:
+  - [x] Working tree sanitized: live `google-services.json` untracked and ignored; replaced by `google-services.json.example`.
+  - [x] Gitleaks configured with targeted allowlist for commit `bfb74bd88fa6df006fb40216a2b140faa83cde27`.
+  - [ ] **Administrator Action**: Access [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials), locate the Android API key, and enforce an application restriction to the package name `com.amrita.attendance` and the SHA-1 fingerprint of the production release keystore.
+  - [ ] **Optional Historical Purge**: If total removal from Git object storage is desired, repository administrators can execute `git filter-repo --invert-paths --path android/app/google-services.json --force` and coordinate a force-push across all contributor clones.

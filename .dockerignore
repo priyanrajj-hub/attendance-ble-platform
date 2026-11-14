@@ -1,0 +1,58 @@
+# ==============================================================================
+# AMRITA ATTENDANCE PLATFORM - DOCKER IGNORE
+# Prevent secrets, development caches, and build artifacts in Docker images
+# ==============================================================================
+
+# Version control
+.git/
+.gitignore
+
+# Environment & credentials
+.env
+.env.*
+*.env
+env/.env*
+backend/env/.env*
+!.env.example
+!**/.env.example
+secrets/
+credentials/
+*.pem
+*.key
+*.jks
+*.keystore
+*.p12
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Flutter / Android / iOS
+android/
+ios/
+build/
+.dart_tool/
+.pub/
+.pub-cache/
+
+# Data & Lakehouse
+data/
+backend/data/
+*.parquet
+*.duckdb
+
+# IDE & temp
+.idea/
+.vscode/
+.gemini/
+.agents/
+*.tmp
+*.log

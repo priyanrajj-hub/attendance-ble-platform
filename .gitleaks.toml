@@ -1,0 +1,20 @@
+title = "Gitleaks Configuration for Amrita BLE Attendance Platform"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlist for synthetic test vectors, public client SDK configuration, and template examples"
+paths = [
+    '''backend/tests/test_challenge_crypto_vectors\.py''',
+    '''test/unit/crypto_cross_test\.dart''',
+    '''lib/firebase_options\.dart''',
+    '''android/app/google-services\.json\.example''',
+    '''\.env\.example''',
+    '''backend/\.env\.example''',
+    '''backend/env/\.env\.example''',
+    '''env/\.env\.example''',
+]
+commits = [
+    "bfb74bd88fa6df006fb40216a2b140faa83cde27",
+]
