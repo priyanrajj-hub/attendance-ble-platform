@@ -22,7 +22,8 @@ from app.routers import (
     sessions,
     roster,
     reports,
-    checkin_stub,
+    checkin,
+    devices,
     data_pipeline,
 )
 
@@ -57,7 +58,8 @@ app.include_router(courses.router, prefix=settings.API_V1_STR)
 app.include_router(sessions.router, prefix=settings.API_V1_STR)
 app.include_router(roster.router, prefix=settings.API_V1_STR)
 app.include_router(reports.router, prefix=settings.API_V1_STR)
-app.include_router(checkin_stub.router, prefix=settings.API_V1_STR)
+app.include_router(checkin.router, prefix=settings.API_V1_STR)
+app.include_router(devices.router, prefix=settings.API_V1_STR)
 app.include_router(data_pipeline.router, prefix=settings.API_V1_STR)
 
 # 4. Mount Interactive Web Application & Anime Simulator

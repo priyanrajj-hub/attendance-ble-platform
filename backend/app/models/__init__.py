@@ -8,6 +8,7 @@ from app.models.attendance_record import AttendanceRecord
 from app.models.override import Override
 from app.models.dispute import Dispute
 from app.models.audit_log import AuditLog
+from app.models.challenge import Challenge
 
 __all__ = [
     "Institution",
@@ -20,4 +21,5 @@ __all__ = [
     "Override",
     "Dispute",
     "AuditLog",
+    "Challenge",
 ]
