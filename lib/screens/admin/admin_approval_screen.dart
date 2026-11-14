@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/admin_approval_repository.dart';
-import '../../widgets/persona_switcher_sheet.dart';
 
 class AdminApprovalScreen extends ConsumerStatefulWidget {
   const AdminApprovalScreen({super.key});
@@ -16,10 +15,16 @@ class _AdminApprovalScreenState extends ConsumerState<AdminApprovalScreen> {
   bool _isProcessing = false;
 
   Future<void> _handleDecision(String uid, ApprovalDecision decision, String userName) async {
+    String? reason;
+    if (decision == ApprovalDecision.reject) {
+      reason = await _promptRejectionReason();
+      if (reason == null) return; // user cancelled
+    }
+
     setState(() => _isProcessing = true);
     try {
       final repo = ref.read(adminApprovalRepositoryProvider);
-      await repo.reviewUser(uid: uid, decision: decision);
+      await repo.reviewUser(uid: uid, decision: decision, reason: reason);
 
       if (mounted) {
         final actionName = decision == ApprovalDecision.approve ? 'approved' : 'rejected';
@@ -41,6 +46,33 @@ class _AdminApprovalScreenState extends ConsumerState<AdminApprovalScreen> {
     }
   }
 
+  Future<String?> _promptRejectionReason() async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rejection Reason'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'Enter reason (e.g. Unverified enrollment)',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Confirm Reject'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = ref.watch(adminApprovalRepositoryProvider);
@@ -49,11 +81,6 @@ class _AdminApprovalScreenState extends ConsumerState<AdminApprovalScreen> {
       appBar: AppBar(
         title: const Text('Admin Verification Portal'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.swap_horizontal_circle_outlined),
-            tooltip: 'Switch Persona',
-            onPressed: () => showPersonaSwitcherModal(context, ref),
-          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sign Out',
@@ -135,6 +162,11 @@ class _AdminApprovalScreenState extends ConsumerState<AdminApprovalScreen> {
                                   user.email,
                                   style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                                 ),
+                                if (user.rollNo != null)
+                                  Text(
+                                    'Roll: ${user.rollNo}',
+                                    style: TextStyle(color: Colors.indigo.shade700, fontSize: 12, fontWeight: FontWeight.w500),
+                                  ),
                               ],
                             ),
                           ),

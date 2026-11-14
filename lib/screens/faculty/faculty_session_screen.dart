@@ -24,13 +24,7 @@ class _FacultySessionScreenState extends ConsumerState<FacultySessionScreen> {
   Timer? _timer;
   bool _isSessionActive = false;
 
-  final List<Map<String, dynamic>> _roster = [
-    {'name': 'Aarav Patel', 'roll': 'AM.EN.U4CSE21001', 'checkedIn': true, 'time': '10:02 AM'},
-    {'name': 'Diya Sharma', 'roll': 'AM.EN.U4CSE21002', 'checkedIn': true, 'time': '10:03 AM'},
-    {'name': 'Kavya Nair', 'roll': 'AM.EN.U4CSE21003', 'checkedIn': true, 'time': '10:03 AM'},
-    {'name': 'Rahul Verma', 'roll': 'AM.EN.U4CSE21004', 'checkedIn': false, 'time': null},
-    {'name': 'Siddharth Iyer', 'roll': 'AM.EN.U4CSE21005', 'checkedIn': false, 'time': null},
-  ];
+  final List<Map<String, dynamic>> _roster = [];
 
   @override
   void initState() {

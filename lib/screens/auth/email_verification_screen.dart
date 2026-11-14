@@ -14,38 +14,66 @@ class EmailVerificationScreen extends ConsumerStatefulWidget {
 
 class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScreen> {
   bool _isChecking = false;
-  bool _resent = false;
-  Timer? _timer;
+  int _resendCooldownSeconds = 0;
+  Timer? _pollTimer;
+  Timer? _cooldownTimer;
 
   @override
   void initState() {
     super.initState();
-    // Periodically poll auth state every 4 seconds
-    _timer = Timer.periodic(const Duration(seconds: 4), (_) => _checkVerification());
+    // Quietly poll auth state every 4 seconds without SnackBar spam
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _pollVerificationStatus());
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _pollTimer?.cancel();
+    _cooldownTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _checkVerification() async {
+  Future<void> _pollVerificationStatus() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      await user.reload();
-      if (user.emailVerified && mounted) {
-        _timer?.cancel();
-        context.go('/pending-approval');
-        return;
+      try {
+        await user.reload();
+        await user.getIdToken(true);
+        if (user.emailVerified && mounted) {
+          _pollTimer?.cancel();
+          context.go('/pending-approval');
+        }
+      } catch (_) {
+        // Quiet failure during background poll
       }
     }
+  }
+
+  Future<void> _manualCheckVerification() async {
+    setState(() => _isChecking = true);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await user.reload();
+        await user.getIdToken(true);
+        if (user.emailVerified && mounted) {
+          _pollTimer?.cancel();
+          context.go('/pending-approval');
+          return;
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error checking status: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+
     if (mounted) {
+      setState(() => _isChecking = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Email link has not yet been clicked. Please check your inbox / spam folder or tap Test Mode below.',
-          ),
+          content: Text('Email has not been verified yet. Please check your inbox or spam folder.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -53,14 +81,43 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
   }
 
   Future<void> _resendVerificationEmail() async {
+    if (_resendCooldownSeconds > 0) return;
+
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      await user.sendEmailVerification();
-      if (!mounted) return;
-      setState(() => _resent = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Verification email resent. Please check your inbox.')),
-      );
+      try {
+        await user.sendEmailVerification();
+        if (!mounted) return;
+        setState(() => _resendCooldownSeconds = 30);
+        _cooldownTimer?.cancel();
+        _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          if (!mounted) {
+            timer.cancel();
+            return;
+          }
+          setState(() {
+            if (_resendCooldownSeconds > 1) {
+              _resendCooldownSeconds--;
+            } else {
+              _resendCooldownSeconds = 0;
+              timer.cancel();
+            }
+          });
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Verification email resent. Please check your inbox.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to resend: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
     }
   }
 
@@ -76,10 +133,10 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
             icon: const Icon(Icons.logout),
             tooltip: 'Sign Out',
             onPressed: () async {
-              _timer?.cancel();
+              _pollTimer?.cancel();
+              _cooldownTimer?.cancel();
               await ref.read(authControllerProvider.notifier).signOut();
-              if (mounted) {
-                // ignore: use_build_context_synchronously
+              if (context.mounted) {
                 context.go('/login');
               }
             },
@@ -131,34 +188,17 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
                           )
                         : const Icon(Icons.refresh),
                     label: const Text('I Have Verified My Email'),
-                    onPressed: _isChecking
-                        ? null
-                        : () async {
-                            setState(() => _isChecking = true);
-                            await _checkVerification();
-                            if (mounted) setState(() => _isChecking = false);
-                          },
+                    onPressed: _isChecking ? null : _manualCheckVerification,
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.send_outlined),
-                    label: Text(_resent ? 'Email Resent' : 'Resend Verification Email'),
-                    onPressed: _resent ? null : _resendVerificationEmail,
-                  ),
-                  const SizedBox(height: 24),
-                  const Divider(),
-                  const SizedBox(height: 12),
-                  TextButton.icon(
-                    icon: const Icon(Icons.bolt, color: Color(0xFF283593)),
-                    label: const Text(
-                      '⚡ Test Mode: Skip To Approval (Evaluator Bypass)',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    label: Text(
+                      _resendCooldownSeconds > 0
+                          ? 'Resend in ${_resendCooldownSeconds}s'
+                          : 'Resend Verification Email',
                     ),
-                    onPressed: () {
-                      _timer?.cancel();
-                      ref.read(demoProfileProvider.notifier).state = DemoPersonas.student;
-                      context.go('/student');
-                    },
+                    onPressed: _resendCooldownSeconds > 0 ? null : _resendVerificationEmail,
                   ),
                 ],
               ),

@@ -5,7 +5,6 @@ import '../../models/user_role.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/proximity_provider.dart';
 import '../../services/biometric_service.dart';
-import '../../widgets/persona_switcher_sheet.dart';
 
 class StudentHomeScreen extends ConsumerStatefulWidget {
   const StudentHomeScreen({super.key});
@@ -30,7 +29,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
 
     // 1. Mandatory Biometric / Fingerprint Check (Anti-Proxy Defense)
     final bioService = ref.read(biometricServiceProvider);
-    final bioResult = await bioService.verifyAttendanceFingerprint();
+    final bioResult = await bioService.verifyAttendanceBiometric();
     if (!bioResult.isSuccess) {
       setState(() {
         _isCheckingIn = false;
@@ -46,7 +45,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
 
     try {
       final prox = ref.read(proximityProvider);
-      await prox.startSession('SESSION_CSE450_TODAY', role: UserRole.student);
+      await prox.startSession('SESSION_LIVE', role: UserRole.student);
     } catch (e) {
       setState(() {
         _isCheckingIn = false;
@@ -93,11 +92,6 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
       appBar: AppBar(
         title: const Text('Student Portal'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.swap_horizontal_circle_outlined),
-            tooltip: 'Switch Persona',
-            onPressed: () => showPersonaSwitcherModal(context, ref),
-          ),
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: 'Attendance History',
@@ -185,11 +179,11 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '19CSE450: Mobile Computing',
+                                'Active Course Session',
                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                               ),
                               Text(
-                                'Room 204 • Dr. R. Subramanian',
+                                'Scheduled Classroom',
                                 style: TextStyle(color: Colors.grey, fontSize: 13),
                               ),
                             ],
@@ -367,7 +361,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
               child: ListTile(
                 leading: const Icon(Icons.analytics_outlined, color: Color(0xFF283593)),
                 title: const Text('My Attendance Rate'),
-                subtitle: const Text('Semester Overall: 94.2% (Requirement: 75%)'),
+                subtitle: const Text('View verified attendance log'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.go('/student/history'),
               ),

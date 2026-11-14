@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/user_role.dart';
 import '../../providers/auth_provider.dart';
-import '../../services/biometric_service.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -16,6 +16,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _rollNoController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
@@ -27,25 +28,33 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _rollNoController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
+  String _mapAuthError(Object error) {
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'email-already-in-use':
+          return 'An account already exists with this institutional email.';
+        case 'weak-password':
+          return 'The password provided is too weak. Must be at least 8 characters.';
+        case 'invalid-email':
+          return 'Invalid institutional email address.';
+        case 'network-request-failed':
+          return 'Network error. Please check your internet connection.';
+        default:
+          return error.message ?? 'Registration failed. Please try again.';
+      }
+    }
+    return error.toString().replaceFirst(RegExp(r'\[.*?\]\s*'), '');
+  }
+
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _errorMessage = null);
-
-    // 1. Enforce Fingerprint Anti-Proxy Device Registration
-    final bioService = ref.read(biometricServiceProvider);
-    final bioResult = await bioService.registerFingerprintBinding();
-    if (!bioResult.isSuccess) {
-      setState(() {
-        _errorMessage = bioResult.errorMessage ??
-            'Fingerprint registration is required. You must scan your finger to bind this device to your identity.';
-      });
-      return;
-    }
 
     try {
       await ref.read(authControllerProvider.notifier).register(
@@ -53,14 +62,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             password: _passwordController.text,
             fullName: _nameController.text,
             role: _selectedRole,
+            rollNo: _selectedRole == UserRole.student ? _rollNoController.text : null,
           );
       if (mounted) {
         context.go('/verify-email');
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceFirst(RegExp(r'\[.*?\]\s*'), '');
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = _mapAuthError(e);
+        });
+      }
     }
   }
 
@@ -166,16 +178,39 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     TextFormField(
                       controller: _nameController,
                       decoration: const InputDecoration(
-                        labelText: 'Full Name',
+                        labelText: 'Full Legal Name',
                         prefixIcon: Icon(Icons.person_outline),
                       ),
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter your full legal name';
+                        if (value == null || value.trim().length < 2 || value.trim().length > 80) {
+                          return 'Name must be between 2 and 80 characters';
                         }
                         return null;
                       },
                     ),
+                    if (_selectedRole == UserRole.student) ...[
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _rollNoController,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: const InputDecoration(
+                          labelText: 'Roll Number',
+                          hintText: 'e.g. AM.EN.U4CSE21001',
+                          prefixIcon: Icon(Icons.badge_outlined),
+                        ),
+                        validator: (value) {
+                          if (_selectedRole == UserRole.student) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Roll number is required for students';
+                            }
+                            if (value.trim().length < 3 || value.trim().length > 30) {
+                              return 'Invalid roll number format';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _emailController,
@@ -195,7 +230,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             email.endsWith('@yahoo.com') ||
                             email.endsWith('@outlook.com') ||
                             email.endsWith('@hotmail.com')) {
-                          return 'Personal accounts (@gmail.com) are strictly blocked by university security policy. Please use ${_selectedRole.expectedDomain}';
+                          return 'Commercial accounts are blocked. Use your official Amrita address (${_selectedRole.expectedDomain}).';
                         }
                         if (!email.endsWith(_selectedRole.expectedDomain)) {
                           return 'Must end with ${_selectedRole.expectedDomain}';
@@ -222,8 +257,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         if (value == null || value.isEmpty) {
                           return 'Password is required';
                         }
-                        if (value.length < 6) {
-                          return 'Must be at least 6 characters';
+                        if (value.length < 8) {
+                          return 'Must be at least 8 characters';
                         }
                         return null;
                       },
@@ -243,50 +278,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF283593).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: const Color(0xFF283593).withOpacity(0.2),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.fingerprint,
-                            color: Color(0xFF283593),
-                            size: 28,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Anti-Proxy Fingerprint Binding',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Your fingerprint will be registered to bind this device to your identity. Proxy attendance by others is permanently blocked.',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: isLoading ? null : _handleRegister,
                       style: ElevatedButton.styleFrom(
@@ -295,25 +287,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ),
                       child: isLoading
                           ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Create Account'),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('Already registered?'),
-                        TextButton(
-                          onPressed: () => context.go('/login'),
-                          child: const Text('Sign In'),
-                        ),
-                      ],
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                          : const Text('Complete Registration'),
                     ),
                   ],
                 ),

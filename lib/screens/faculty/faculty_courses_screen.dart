@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/persona_switcher_sheet.dart';
 
 class FacultyCoursesScreen extends ConsumerWidget {
   const FacultyCoursesScreen({super.key});
@@ -39,11 +38,6 @@ class FacultyCoursesScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Faculty Portal'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.swap_horizontal_circle_outlined),
-            tooltip: 'Switch Persona',
-            onPressed: () => showPersonaSwitcherModal(context, ref),
-          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sign Out',

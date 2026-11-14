@@ -16,28 +16,12 @@ import '../screens/faculty/faculty_session_screen.dart';
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateChangesProvider);
   final profileState = ref.watch(userProfileProvider);
-  final demoProfile = ref.watch(demoProfileProvider);
 
   return GoRouter(
     initialLocation: '/login',
     debugLogDiagnostics: false,
     redirect: (BuildContext context, GoRouterState state) {
       final loc = state.matchedLocation;
-
-      // 0. Demo Persona Override for instant field testing
-      if (demoProfile != null) {
-        switch (demoProfile.role) {
-          case UserRole.student:
-            if (!loc.startsWith('/student')) return '/student';
-            return null;
-          case UserRole.faculty:
-            if (!loc.startsWith('/faculty')) return '/faculty';
-            return null;
-          case UserRole.admin:
-            if (!loc.startsWith('/admin')) return '/admin';
-            return null;
-        }
-      }
 
       final user = authState.value;
       final profile = profileState.value;

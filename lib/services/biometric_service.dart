@@ -1,14 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 
-/// Anti-Proxy Fingerprint and Biometric Service.
-///
-/// Strictly enforces hardware-backed biometric verification:
-/// 1. At Registration: User registers their finger to bind their device to their student profile.
-/// 2. At Check-in: User must scan their registered finger before BLE attendance can be broadcast or recorded.
-/// This prevents any proxy attendance by peers or third parties.
+/// Hardware-backed biometric service for user presence verification.
 class BiometricService {
   final LocalAuthentication _auth;
 
@@ -28,7 +22,7 @@ class BiometricService {
     }
   }
 
-  /// Lists available biometric sensors enrolled on this device (e.g. fingerprint, face).
+  /// Lists available biometric sensors enrolled on this device.
   Future<List<BiometricType>> getAvailableBiometrics() async {
     try {
       return await _auth.getAvailableBiometrics();
@@ -39,41 +33,25 @@ class BiometricService {
     }
   }
 
-  /// Prompts the user to register their fingerprint and bind it to their account.
-  Future<BiometricResult> registerFingerprintBinding() async {
+  /// Prompts the user to verify physical presence via biometrics before check-in.
+  Future<BiometricResult> verifyAttendanceBiometric() async {
     return authenticate(
-      reason:
-          'Scan your registered fingerprint to bind this device to your student identity (Anti-Proxy Defense).',
-    );
-  }
-
-  /// Prompts the user to verify physical presence via fingerprint before check-in.
-  Future<BiometricResult> verifyAttendanceFingerprint() async {
-    return authenticate(
-      reason:
-          'Scan your fingerprint to confirm physical presence for attendance check-in. Proxy attendance is strictly prohibited.',
+      reason: 'Scan your biometric credential to confirm physical presence for class attendance.',
+      biometricOnly: true,
     );
   }
 
   /// Core biometric prompt method.
+  /// Strictly requires biometricOnly: true (no PIN/pattern fallback).
   Future<BiometricResult> authenticate({
     required String reason,
-    bool biometricOnly = false,
+    bool biometricOnly = true,
   }) async {
     try {
       final supported = await isBiometricSupported();
       if (!supported) {
-        // If testing on desktop / non-biometric emulator in debug mode, pass safely with log
-        if (kDebugMode) {
-          debugPrint(
-              'Biometrics not available on this host - simulated pass in debug mode.');
-          return const BiometricResult.success(
-            simulated: true,
-            message: 'Simulated pass in development mode (No biometric hardware)',
-          );
-        }
         return const BiometricResult.failure(
-          'No biometric hardware or enrolled fingerprints found on this device. Please enroll a fingerprint in your device settings.',
+          'No biometric hardware or enrolled biometrics found on this device. Please enroll a biometric credential in your device settings.',
         );
       }
 
@@ -89,11 +67,11 @@ class BiometricService {
         return const BiometricResult.success();
       } else {
         return const BiometricResult.failure(
-          'Fingerprint verification was cancelled or did not match. Attendance requires valid biometric authentication.',
+          'Biometric verification was cancelled or did not match.',
         );
       }
     } on PlatformException catch (e) {
-      return BiometricResult.failure('Biometric error: ${e.message ?? e.code}');
+      return BiometricResult.failure('Biometric authentication error: ${e.message ?? e.code}');
     } catch (e) {
       return BiometricResult.failure('Authentication failed: $e');
     }
@@ -103,15 +81,13 @@ class BiometricService {
 class BiometricResult {
   final bool isSuccess;
   final String? errorMessage;
-  final bool simulated;
 
-  const BiometricResult.success({this.simulated = false, String? message})
+  const BiometricResult.success()
       : isSuccess = true,
-        errorMessage = message;
+        errorMessage = null;
 
   const BiometricResult.failure(this.errorMessage)
-      : isSuccess = false,
-        simulated = false;
+      : isSuccess = false;
 }
 
 final biometricServiceProvider = Provider<BiometricService>((ref) {

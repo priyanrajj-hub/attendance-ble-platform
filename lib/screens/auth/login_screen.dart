@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 
@@ -16,12 +17,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   String? _errorMessage;
+  bool _isResettingPassword = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  String _mapAuthError(Object error) {
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'user-not-found':
+        case 'wrong-password':
+        case 'invalid-credential':
+          return 'Invalid institutional email or password.';
+        case 'user-disabled':
+          return 'This account has been disabled. Contact system administrator.';
+        case 'too-many-requests':
+          return 'Too many failed login attempts. Please wait a few minutes and try again.';
+        case 'network-request-failed':
+          return 'Network error. Please check your internet connection.';
+        case 'invalid-email':
+          return 'Invalid email address format.';
+        default:
+          return error.message ?? 'Authentication failed. Please try again.';
+      }
+    }
+    return error.toString().replaceFirst(RegExp(r'\[.*?\]\s*'), '');
   }
 
   Future<void> _handleLogin() async {
@@ -34,9 +58,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             _passwordController.text,
           );
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceFirst(RegExp(r'\[.*?\]\s*'), '');
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = _mapAuthError(e);
+        });
+      }
+    }
+  }
+
+  Future<void> _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _errorMessage = 'Enter your institutional email above to receive a reset link.');
+      return;
+    }
+    setState(() {
+      _isResettingPassword = true;
+      _errorMessage = null;
+    });
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Password reset link sent to $email'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _errorMessage = _mapAuthError(e));
+      }
+    } finally {
+      if (mounted) setState(() => _isResettingPassword = false);
     }
   }
 
@@ -65,7 +120,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Amrita BLE Attendance',
+                      'Amrita Attendance',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                             fontWeight: FontWeight.bold,
@@ -122,7 +177,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             email.endsWith('@yahoo.com') ||
                             email.endsWith('@outlook.com') ||
                             email.endsWith('@hotmail.com')) {
-                          return 'Personal Gmail/commercial accounts are blocked. Use your official Amrita address (@ch.students.amrita.edu or @ch.amrita.edu).';
+                          return 'Commercial accounts are blocked. Use your official Amrita address (@ch.students.amrita.edu or @ch.amrita.edu).';
                         }
                         if (!email.endsWith('@ch.students.amrita.edu') &&
                             !email.endsWith('@ch.amrita.edu')) {
@@ -150,13 +205,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         if (value == null || value.isEmpty) {
                           return 'Please enter your password';
                         }
-                        if (value.length < 6) {
-                          return 'Password must be at least 6 characters';
+                        if (value.length < 8) {
+                          return 'Password must be at least 8 characters';
                         }
                         return null;
                       },
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _isResettingPassword ? null : _handleForgotPassword,
+                        child: _isResettingPassword
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Forgot Password?'),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: isLoading ? null : _handleLogin,
                       style: ElevatedButton.styleFrom(
@@ -165,13 +234,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       child: isLoading
                           ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
                           : const Text('Sign In'),
                     ),
                     const SizedBox(height: 16),
@@ -184,89 +253,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: const Text('Register Here'),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0F4FF),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFC5CAE9)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: const [
-                              Icon(Icons.bolt, color: Color(0xFF283593)),
-                              SizedBox(width: 8),
-                              Text(
-                                'Instant Demo & Field Verification',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF283593),
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'One-tap test access for physical phone evaluation without email/password barriers:',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                          ),
-                          const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.school, size: 18),
-                            label: const Text('Launch Student Mode (PriyanRaj J)'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF3949AB),
-                              foregroundColor: Colors.white,
-                              elevation: 1,
-                              padding: const EdgeInsets.symmetric(vertical: 11),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                            onPressed: () {
-                              ref.read(demoProfileProvider.notifier).state = DemoPersonas.student;
-                              context.go('/student');
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.sensors, size: 18),
-                            label: const Text('Launch Faculty Mode (Dr. Rajesh)'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00796B),
-                              foregroundColor: Colors.white,
-                              elevation: 1,
-                              padding: const EdgeInsets.symmetric(vertical: 11),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                            onPressed: () {
-                              ref.read(demoProfileProvider.notifier).state = DemoPersonas.faculty;
-                              context.go('/faculty');
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.verified_user, size: 18),
-                            label: const Text('Launch Admin Mode (Chief Admin)'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFE65100),
-                              foregroundColor: Colors.white,
-                              elevation: 1,
-                              padding: const EdgeInsets.symmetric(vertical: 11),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                            onPressed: () {
-                              ref.read(demoProfileProvider.notifier).state = DemoPersonas.admin;
-                              context.go('/admin');
-                            },
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),

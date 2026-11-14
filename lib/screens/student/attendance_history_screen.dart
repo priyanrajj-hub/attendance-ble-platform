@@ -5,36 +5,7 @@ class AttendanceHistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final records = [
-      {
-        'course': '19CSE450: Mobile Computing',
-        'date': 'Today, 10:15 AM',
-        'room': 'Room 204',
-        'status': 'Present',
-        'mode': 'BLE Nonce Signed',
-      },
-      {
-        'course': '19CSE450: Mobile Computing',
-        'date': 'Yesterday, 10:14 AM',
-        'room': 'Room 204',
-        'status': 'Present',
-        'mode': 'BLE Nonce Signed',
-      },
-      {
-        'course': '19CSE401: Distributed Systems',
-        'date': 'Nov 10, 2:02 PM',
-        'room': 'Lab 3',
-        'status': 'Late',
-        'mode': 'BLE Proximity',
-      },
-      {
-        'course': '19CSE401: Distributed Systems',
-        'date': 'Nov 08, 2:00 PM',
-        'room': 'Lab 3',
-        'status': 'Present',
-        'mode': 'BLE Nonce Signed',
-      },
-    ];
+    final List<Map<String, dynamic>> records = [];
 
     return Scaffold(
       appBar: AppBar(
@@ -48,7 +19,7 @@ class AttendanceHistoryScreen extends StatelessWidget {
               Expanded(
                 child: _StatCard(
                   label: 'Classes Attended',
-                  value: '42 / 45',
+                  value: '${records.length}',
                   color: Colors.indigo,
                 ),
               ),
@@ -56,7 +27,7 @@ class AttendanceHistoryScreen extends StatelessWidget {
               Expanded(
                 child: _StatCard(
                   label: 'Attendance Rate',
-                  value: '93.3%',
+                  value: records.isEmpty ? 'No data' : '100%',
                   color: Colors.green,
                 ),
               ),

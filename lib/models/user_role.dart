@@ -15,6 +15,17 @@ enum UserRole {
     }
   }
 
+  String get firestoreKey {
+    switch (this) {
+      case UserRole.student:
+        return 'student';
+      case UserRole.faculty:
+        return 'faculty';
+      case UserRole.admin:
+        return 'admin';
+    }
+  }
+
   /// Expected institutional email domain for each role
   String get expectedDomain {
     switch (this) {
@@ -26,8 +37,8 @@ enum UserRole {
     }
   }
 
-  static UserRole fromString(String role) {
-    switch (role.toLowerCase().trim()) {
+  static UserRole fromString(String? role) {
+    switch (role?.toLowerCase().trim()) {
       case 'student':
         return UserRole.student;
       case 'faculty':
@@ -36,7 +47,7 @@ enum UserRole {
       case 'administrator':
         return UserRole.admin;
       default:
-        throw ArgumentError('Unknown user role: $role');
+        return UserRole.student;
     }
   }
 }
