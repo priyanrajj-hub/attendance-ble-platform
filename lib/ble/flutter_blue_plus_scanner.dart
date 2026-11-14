@@ -35,8 +35,10 @@ class FlutterBluePlusScanner implements BeaconScanner {
       await FlutterBluePlus.startScan(
         continuousUpdates: true,
       );
-    } catch (_) {
-      // Handled upstream in permissions / adapter state checks
+    } catch (e) {
+      if (!_sightingController.isClosed) {
+        _sightingController.addError(e);
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 import pytest
 import uuid
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.main import app
 from app.auth.rbac import get_current_user, AuthenticatedUser
@@ -56,15 +57,19 @@ async def test_csv_malformed_utf8_rejected(
 
     # Create dummy course
     uid_suffix = uuid.uuid4().hex[:8]
-    faculty = User(
-        firebase_uid=f"fac-utf8-{uid_suffix}",
-        email=f"fac_utf8_{uid_suffix}@ch.amrita.edu",
-        display_name="Dr. UTF8",
-        role="faculty",
-        status="verified",
-    )
-    db_session.add(faculty)
-    await db_session.flush()
+    f_stmt = select(User).where(User.firebase_uid == mock_faculty_user.uid)
+    f_res = await db_session.execute(f_stmt)
+    faculty = f_res.scalar_one_or_none()
+    if not faculty:
+        faculty = User(
+            firebase_uid=mock_faculty_user.uid,
+            email=mock_faculty_user.email,
+            display_name="Dr. UTF8",
+            role="faculty",
+            status="verified",
+        )
+        db_session.add(faculty)
+        await db_session.flush()
 
     course = Course(
         code=f"CSE{uid_suffix[:4].upper()}",
@@ -97,15 +102,20 @@ async def test_csv_valid_import_and_formula_defense(
 
     # Create course
     uid_suffix = uuid.uuid4().hex[:8]
-    faculty = User(
-        firebase_uid=f"fac-roster-{uid_suffix}",
-        email=f"fac_roster_{uid_suffix}@ch.amrita.edu",
-        display_name="Dr. Roster",
-        role="faculty",
-        status="verified",
-    )
-    db_session.add(faculty)
-    await db_session.flush()
+    # Check if faculty user already exists for this test session
+    f_stmt = select(User).where(User.firebase_uid == mock_faculty_user.uid)
+    f_res = await db_session.execute(f_stmt)
+    faculty = f_res.scalar_one_or_none()
+    if not faculty:
+        faculty = User(
+            firebase_uid=mock_faculty_user.uid,
+            email=mock_faculty_user.email,
+            display_name="Dr. Roster",
+            role="faculty",
+            status="verified",
+        )
+        db_session.add(faculty)
+        await db_session.flush()
 
     course = Course(
         code=f"CSE{uid_suffix[:4].upper()}",

@@ -69,6 +69,17 @@ async def import_course_roster(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
 
+    # Verify faculty owns course if not admin
+    if current_user.role != "admin":
+        u_stmt = select(User).where(User.firebase_uid == current_user.uid)
+        u_res = await db.execute(u_stmt)
+        user_record = u_res.scalar_one_or_none()
+        if not user_record or course.faculty_id != user_record.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to import rosters for this course.",
+            )
+
     # 2. Enforce strict UTF-8 decoding
     try:
         decoded_content = content.decode("utf-8")

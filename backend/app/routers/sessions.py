@@ -128,6 +128,17 @@ async def stop_session(
     if not sess:
         raise HTTPException(status_code=404, detail="Session not found.")
 
+    # Ownership check for faculty
+    if current_user.role != "admin":
+        u_stmt = select(User).where(User.firebase_uid == current_user.uid)
+        u_res = await db.execute(u_stmt)
+        user_record = u_res.scalar_one_or_none()
+        if not user_record or sess.started_by != user_record.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to stop another faculty member's session.",
+            )
+
     sess.status = "closed"
     sess.closes_at = datetime.now(timezone.utc)
     await db.commit()

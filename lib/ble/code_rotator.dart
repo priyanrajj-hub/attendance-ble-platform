@@ -23,6 +23,8 @@ class CodeRotator {
   String? _prevCode;
   BeaconHealth _health = BeaconHealth.idle;
   String? _lastError;
+  bool _isRotating = false;
+  bool _isDisposed = false;
 
   final _healthController = StreamController<BeaconHealth>.broadcast();
 
@@ -55,6 +57,12 @@ class CodeRotator {
   }
 
   Future<void> start() async {
+    if (_health == BeaconHealth.advertising && _rotationTimer != null) {
+      return; // Already actively advertising
+    }
+    _rotationTimer?.cancel();
+    _rotationTimer = null;
+
     try {
       // Keep faculty screen awake during active broadcast session
       await WakelockPlus.enable();
@@ -62,7 +70,6 @@ class CodeRotator {
 
     await _rotateAndAdvertise();
 
-    _rotationTimer?.cancel();
     _rotationTimer = Timer.periodic(
       const Duration(seconds: BleConstants.rotationPeriodSeconds),
       (_) => _rotateAndAdvertise(),
@@ -70,6 +77,8 @@ class CodeRotator {
   }
 
   Future<void> _rotateAndAdvertise() async {
+    if (_isRotating || _isDisposed) return;
+    _isRotating = true;
     try {
       _prevCode = _currentCode;
       _currentCode = generate8HexCode();
@@ -99,6 +108,8 @@ class CodeRotator {
     } catch (e) {
       debugPrint('Code rotation failure: $e');
       _setHealth(BeaconHealth.unhealthy, error: e.toString());
+    } finally {
+      _isRotating = false;
     }
   }
 
@@ -113,6 +124,7 @@ class CodeRotator {
   }
 
   void dispose() {
+    _isDisposed = true;
     stop();
     _healthController.close();
   }

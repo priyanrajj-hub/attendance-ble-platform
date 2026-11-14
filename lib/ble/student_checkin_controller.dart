@@ -123,6 +123,10 @@ class StudentCheckInController extends StateNotifier<CheckInState> {
           completer.complete(recentSightings.last);
         }
       }
+    }, onError: (_) {
+      if (!completer.isCompleted) {
+        completer.complete(null);
+      }
     });
 
     timeoutTimer = Timer(const Duration(seconds: BleConstants.scanTimeoutSeconds), () {
@@ -141,9 +145,13 @@ class StudentCheckInController extends StateNotifier<CheckInState> {
       return;
     }
 
-    // 5. Evaluate RSSI threshold gate
-    final codeSightings = sightingsByCode[winner.code] ?? [winner];
-    final meanRssi = codeSightings.map((s) => s.rssi).reduce((a, b) => a + b) / codeSightings.length;
+    // 5. Evaluate RSSI threshold gate (using strictly fresh window sightings)
+    final now = DateTime.now();
+    final freshSightings = (sightingsByCode[winner.code] ?? [winner])
+        .where((s) => now.difference(s.seenAt).inSeconds <= BleConstants.sightingWindowSeconds)
+        .toList();
+    final effectiveSightings = freshSightings.isNotEmpty ? freshSightings : [winner];
+    final meanRssi = effectiveSightings.map((s) => s.rssi).reduce((a, b) => a + b) / effectiveSightings.length;
 
     if (meanRssi < minRssi) {
       state = CheckInError(WeakSignalFailure(meanRssi.round(), minRssi));
@@ -175,6 +183,25 @@ class StudentCheckInController extends StateNotifier<CheckInState> {
       );
     } on FirebaseException catch (e) {
       if (e.code == 'permission-denied') {
+        // Distinguish already-marked from code rejected
+        try {
+          final recordRef = _firestore
+              .collection('sessions')
+              .doc(sessionId)
+              .collection('attendance')
+              .doc(studentUid);
+          final existing = await recordRef.get();
+          if (existing.exists) {
+            final markedAt = existing.data()?['markedAt'];
+            final markedDate = markedAt is Timestamp ? markedAt.toDate() : DateTime.now();
+            state = CheckInSuccess(
+              sessionId: sessionId,
+              serverTime: markedDate,
+              rssi: (existing.data()?['rssi'] as num?)?.toInt() ?? meanRssi.round(),
+            );
+            return;
+          }
+        } catch (_) {}
         state = const CheckInError(CodeRejectedFailure());
       } else {
         state = CheckInError(UnknownBleFailure(e.message ?? e.code));

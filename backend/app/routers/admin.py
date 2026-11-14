@@ -9,6 +9,7 @@ import firebase_admin
 from firebase_admin import auth
 
 from app.auth.rbac import AuthenticatedUser, require_role
+from app.config import settings
 from app.db.session import get_db
 from app.models.user import User
 from app.models.audit_log import AuditLog
@@ -45,6 +46,12 @@ async def approve_user(
     2. Updates user record in PostgreSQL.
     3. Writes immutable audit log.
     """
+    if uid == current_admin.uid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Administrators cannot approve or modify their own account privileges.",
+        )
+
     # Find user in PostgreSQL
     stmt = select(User).where(User.firebase_uid == uid)
     result = await db.execute(stmt)
@@ -63,7 +70,11 @@ async def approve_user(
         logger.info("Stamped custom claims on Firebase user %s: role=%s, status=verified", uid, target_role)
     except Exception as e:
         logger.error("Failed to set Firebase custom claims for %s: %s", uid, e)
-        # Note: In test/mock environments or if Firebase is offline, log error and continue if DB update works
+        if settings.ENVIRONMENT == "production":
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Identity provider synchronization failed: {e}",
+            )
 
     # 2. Update or create PostgreSQL record
     if user:

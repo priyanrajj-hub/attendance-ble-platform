@@ -37,10 +37,10 @@ def test_amrita_policy_engine_calculations():
 
 
 @pytest.mark.asyncio
-async def test_proximity_checkin_returns_501_stub(client: AsyncClient):
+async def test_proximity_checkin_requires_auth(client: AsyncClient):
     """
-    SEC-02 Regression: Client cannot directly commit attendance. Proximity check-in
-    stub must return HTTP 501 Not Implemented until Phase 3/4 hardware calibration.
+    SEC-02 Regression: Client cannot directly commit attendance without authentication.
+    Unauthenticated check-in requests must be rejected with HTTP 401 Unauthorized.
     """
     payload = {
         "session_id": "00000000-0000-0000-0000-000000000001",
@@ -48,8 +48,7 @@ async def test_proximity_checkin_returns_501_stub(client: AsyncClient):
         "observed_rssi": -65,
     }
     res = await client.post("/api/v1/attendance/check-in", json=payload)
-    assert res.status_code == 501
-    assert "Proximity check-in is pending BLE field calibration" in res.json()["detail"]
+    assert res.status_code == 401
 
 
 @pytest.mark.asyncio
