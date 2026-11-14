@@ -635,7 +635,7 @@ describe('Phase 3 Comprehensive Firestore Security Rules Suite', () => {
     });
 
     // ── Suite 9: Faculty Manual Override ─────────────────────────────────────
-    describe('9. Faculty Manual Override', () => {
+    describe('9. Faculty Manual Override (Authoritative Backend Only)', () => {
         beforeEach(async () => {
             await testEnv.withSecurityRulesDisabled(async (context) => {
                 const db = context.firestore();
@@ -650,13 +650,13 @@ describe('Phase 3 Comprehensive Firestore Security Rules Suite', () => {
             });
         });
 
-        it('allows owning faculty to manually mark enrolled student with reason', async () => {
+        it('denies direct client manual override writes to Firestore (must route through FastAPI backend)', async () => {
             const ctx = testEnv.authenticatedContext('faculty1', {
                 email: 'fac1@ch.amrita.edu',
                 email_verified: true,
             });
             const db = ctx.firestore();
-            await assertSucceeds(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
+            await assertFails(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
                 studentUid: 'student1',
                 markedAt: serverTimestamp(),
                 method: 'manual',
@@ -692,6 +692,26 @@ describe('Phase 3 Comprehensive Firestore Security Rules Suite', () => {
                 markedBy: 'faculty2',
                 reason: 'Attempted override by other faculty',
             }));
+        });
+
+        it('allows server-side Admin SDK writes and permits owning faculty to read attendance projection', async () => {
+            await testEnv.withSecurityRulesDisabled(async (context) => {
+                const db = context.firestore();
+                await db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
+                    studentUid: 'student1',
+                    markedAt: new Date(),
+                    method: 'faculty_manual_override',
+                    markedBy: 'faculty1',
+                    reason: 'Verified present via backend manual override',
+                });
+            });
+
+            const ctx = testEnv.authenticatedContext('faculty1', {
+                email: 'fac1@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').get());
         });
     });
 

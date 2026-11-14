@@ -108,7 +108,7 @@ async def register_device(
         platform=platform_clean,
         device_model=payload.device_model,
         os_version=payload.os_version,
-        attestation_status="verified",
+        attestation_status="key_registered",
         registered_at=now,
     )
     db.add(new_device)

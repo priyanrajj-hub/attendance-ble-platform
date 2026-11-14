@@ -257,6 +257,33 @@ class AttendanceApiService {
     } catch (_) {}
     return [];
   }
+
+  Future<bool> submitManualOverride({
+    required String sessionId,
+    required String studentId,
+    required String reason,
+  }) async {
+    final token = await _auth.currentUser?.getIdToken();
+    final url = Uri.parse('$_baseUrl/api/v1/sessions/$sessionId/manual-override');
+
+    try {
+      final request = await _client.postUrl(url);
+      request.headers.set('Content-Type', 'application/json');
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+
+      final payload = {
+        'student_id': studentId,
+        'reason': reason,
+      };
+
+      request.add(utf8.encode(jsonEncode(payload)));
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {}
+    return false;
+  }
 }
 
 final attendanceApiServiceProvider = Provider<AttendanceApiService>((ref) {

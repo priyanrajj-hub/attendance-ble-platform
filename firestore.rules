@@ -91,18 +91,10 @@ service cloud.firestore {
 
       match /attendance/{uid} {
         allow read: if isAdmin() || ownsSession(sid) || (isStudent() && request.auth.uid == uid);
-        // Student direct writes to Firestore attendance are disabled.
+        // Direct client SDK writes are strictly disabled.
         // PostgreSQL via FastAPI is the sole authoritative check-in ledger.
-        // Faculty manual override (always labelled, never silent)
-        allow create, update: if ownsSession(sid)
-          && enrolled(sess(sid).courseId, uid)
-          && request.resource.data.keys().hasOnly(['studentUid','markedAt','method','markedBy','reason'])
-          && request.resource.data.studentUid == uid
-          && request.resource.data.method == 'manual'
-          && request.resource.data.markedBy == request.auth.uid
-          && request.resource.data.markedAt == request.time
-          && request.resource.data.reason is string && request.resource.data.reason.size() >= 3;
-        allow delete: if ownsSession(sid) && sess(sid).status == 'open';
+        // Projections are written exclusively by the backend service via the Firebase Admin SDK.
+        allow write: if false;
       }
     }
 

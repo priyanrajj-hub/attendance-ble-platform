@@ -263,18 +263,16 @@ class _FacultySessionScreenState extends ConsumerState<FacultySessionScreen> {
     if (confirmed == true && mounted) {
       try {
         final reason = reasonController.text.trim();
-        await FirebaseFirestore.instance
-            .collection('sessions')
-            .doc(_currentSession!.id)
-            .collection('attendance')
-            .doc(enrollment.studentUid)
-            .set({
-          'studentUid': enrollment.studentUid,
-          'markedAt': FieldValue.serverTimestamp(),
-          'method': 'manual',
-          'markedBy': user.uid,
-          'reason': reason,
-        });
+        final apiService = ref.read(attendanceApiServiceProvider);
+        final success = await apiService.submitManualOverride(
+          sessionId: _currentSession!.id,
+          studentId: enrollment.studentUid,
+          reason: reason,
+        );
+
+        if (!success) {
+          throw Exception('Backend rejected manual override request.');
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

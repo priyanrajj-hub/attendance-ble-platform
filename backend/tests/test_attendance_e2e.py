@@ -371,3 +371,116 @@ async def test_unenrolled_student_rejected(
     )
     assert res.status_code == 403
     assert "Student is not enrolled in this course" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_faculty_manual_override_success(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    e2e_setup: dict,
+):
+    faculty = e2e_setup["faculty"]
+    student = e2e_setup["student"]
+    sess = e2e_setup["session"]
+
+    faculty_auth_user = AuthenticatedUser(
+        uid=faculty.firebase_uid,
+        email=faculty.email,
+        role="faculty",
+        status="verified",
+        display_name=faculty.display_name,
+    )
+    app.dependency_overrides[get_current_user] = lambda: faculty_auth_user
+
+    res = await client.post(
+        f"/api/v1/sessions/{sess.id}/manual-override",
+        json={
+            "student_id": student.firebase_uid,
+            "reason": "BLE radio damaged on student phone, manually verified in room.",
+        },
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "success"
+    assert data["method"] == "faculty_manual_override"
+
+    # Verify persisted in PostgreSQL
+    att_stmt = select(AttendanceRecord).where(
+        AttendanceRecord.session_id == sess.id,
+        AttendanceRecord.student_id == student.id,
+    )
+    att_res = await db_session.execute(att_stmt)
+    rec = att_res.scalar_one_or_none()
+    assert rec is not None
+    assert rec.method == "faculty_manual_override"
+    assert rec.signature_verified is False
+    assert rec.status == "present"
+
+
+@pytest.mark.asyncio
+async def test_faculty_manual_override_short_reason_rejected(
+    client: AsyncClient,
+    e2e_setup: dict,
+):
+    faculty = e2e_setup["faculty"]
+    student = e2e_setup["student"]
+    sess = e2e_setup["session"]
+
+    faculty_auth_user = AuthenticatedUser(
+        uid=faculty.firebase_uid,
+        email=faculty.email,
+        role="faculty",
+        status="verified",
+        display_name=faculty.display_name,
+    )
+    app.dependency_overrides[get_current_user] = lambda: faculty_auth_user
+
+    res = await client.post(
+        f"/api/v1/sessions/{sess.id}/manual-override",
+        json={
+            "student_id": student.firebase_uid,
+            "reason": "ok",  # Less than 3 characters
+        },
+    )
+    assert res.status_code == 400
+    assert "at least 3 characters" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_faculty_manual_override_unauthorized_for_other_faculty(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    e2e_setup: dict,
+):
+    other_uid = f"fac-intruder-{uuid.uuid4().hex[:8]}"
+    other_fac = User(
+        firebase_uid=other_uid,
+        email=f"{other_uid}@cb.amrita.edu",
+        role="faculty",
+        status="verified",
+        display_name="Other Faculty",
+    )
+    db_session.add(other_fac)
+    await db_session.commit()
+
+    other_auth_user = AuthenticatedUser(
+        uid=other_fac.firebase_uid,
+        email=other_fac.email,
+        role="faculty",
+        status="verified",
+        display_name=other_fac.display_name,
+    )
+    app.dependency_overrides[get_current_user] = lambda: other_auth_user
+
+    sess = e2e_setup["session"]
+    student = e2e_setup["student"]
+
+    res = await client.post(
+        f"/api/v1/sessions/{sess.id}/manual-override",
+        json={
+            "student_id": student.firebase_uid,
+            "reason": "Unauthorized override attempt",
+        },
+    )
+    assert res.status_code == 403
+

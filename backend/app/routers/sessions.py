@@ -265,3 +265,159 @@ async def get_session_roster(
             "signature_verified": att.signature_verified if att else False,
         })
     return roster
+
+
+class ManualOverrideRequest(BaseModel):
+    student_id: str
+    reason: str
+
+
+@router.post("/{session_id}/manual-override", summary="Faculty Manual Attendance Override")
+async def manual_override(
+    session_id: str,
+    payload: ManualOverrideRequest,
+    current_user: AuthenticatedUser = Depends(require_role(["faculty", "admin"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Authoritative manual attendance override by faculty.
+    Validates course ownership, active session state, student enrollment,
+    persists to PostgreSQL, and projects to Firestore.
+    """
+    try:
+        sid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format.")
+
+    if not payload.reason or len(payload.reason.strip()) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Override reason must be at least 3 characters long.",
+        )
+
+    # 1. Fetch session
+    sess_stmt = select(Session).where(Session.id == sid)
+    sess_res = await db.execute(sess_stmt)
+    sess = sess_res.scalar_one_or_none()
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    if sess.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Session is {sess.status}, manual override requires active session.",
+        )
+
+    # 2. Fetch faculty user record & verify course ownership
+    f_stmt = select(User).where(User.firebase_uid == current_user.uid)
+    f_res = await db.execute(f_stmt)
+    faculty_user = f_res.scalar_one_or_none()
+    if not faculty_user:
+        raise HTTPException(status_code=403, detail="Faculty profile not found.")
+
+    if current_user.role != "admin" and sess.started_by != faculty_user.id:
+        c_stmt = select(Course).where(Course.id == sess.course_id)
+        c_res = await db.execute(c_stmt)
+        course = c_res.scalar_one_or_none()
+        if not course or course.faculty_id != faculty_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to override attendance for this session.",
+            )
+
+    # 3. Resolve student record by UUID, firebase_uid, or roll_number
+    student = None
+    try:
+        stud_uuid = uuid.UUID(payload.student_id)
+        s_stmt = select(User).where(User.id == stud_uuid)
+        s_res = await db.execute(s_stmt)
+        student = s_res.scalar_one_or_none()
+    except ValueError:
+        pass
+
+    if not student:
+        s_stmt = select(User).where(
+            (User.firebase_uid == payload.student_id.strip())
+            | (User.roll_number == payload.student_id.strip())
+        )
+        s_res = await db.execute(s_stmt)
+        student = s_res.scalar_one_or_none()
+
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+
+    # 4. Verify student is enrolled in the session's course
+    enr_stmt = select(Enrollment).where(
+        Enrollment.course_id == sess.course_id,
+        Enrollment.student_id == student.id,
+        Enrollment.status == "active",
+    )
+    enr_res = await db.execute(enr_stmt)
+    enr = enr_res.scalar_one_or_none()
+    if not enr:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Student is not actively enrolled in this course.",
+        )
+
+    # 5. Insert or update AttendanceRecord
+    now = datetime.now(timezone.utc)
+    att_stmt = select(AttendanceRecord).where(
+        AttendanceRecord.session_id == sid,
+        AttendanceRecord.student_id == student.id,
+    )
+    att_res = await db.execute(att_stmt)
+    existing_record = att_res.scalar_one_or_none()
+
+    if existing_record:
+        existing_record.method = "faculty_manual_override"
+        existing_record.status = "present"
+        existing_record.signature_verified = False
+        existing_record.verified_at = now
+        await db.commit()
+        await db.refresh(existing_record)
+        record = existing_record
+    else:
+        new_record = AttendanceRecord(
+            session_id=sid,
+            student_id=student.id,
+            device_id=None,
+            method="faculty_manual_override",
+            rssi_observed=None,
+            signature_verified=False,
+            verified_at=now,
+            status="present",
+        )
+        db.add(new_record)
+        await db.commit()
+        await db.refresh(new_record)
+        record = new_record
+
+    # 6. Asynchronously project override into Firestore
+    try:
+        from firebase_admin import firestore
+        fs = firestore.client()
+        fs.collection("sessions").document(str(sid)).collection("attendance").document(student.firebase_uid).set({
+            "studentUid": student.firebase_uid,
+            "studentName": student.display_name or student.roll_number or "Student",
+            "rollNo": student.roll_number or "",
+            "markedAt": now,
+            "method": "faculty_manual_override",
+            "markedBy": faculty_user.firebase_uid,
+            "reason": payload.reason.strip(),
+            "status": "present",
+        })
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "attendance_id": str(record.id),
+        "session_id": str(record.session_id),
+        "student_id": str(record.student_id),
+        "student_uid": student.firebase_uid,
+        "method": record.method,
+        "verified_at": record.verified_at,
+        "message": f"Manual override recorded for student {student.roll_number or student.firebase_uid}.",
+    }
+
