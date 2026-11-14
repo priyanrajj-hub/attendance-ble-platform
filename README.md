@@ -1,102 +1,112 @@
-# BLE Attendance Test — Phase 1
+# Amrita Attendance Platform
 
-Minimal test app to validate BLE-based proximity detection between a
-"student" device (broadcaster) and a "faculty" device (scanner), before
-building out the full attendance app.
+Enterprise Bluetooth Low Energy (BLE) proximity attendance tracking system for Amrita Vishwa Vidyapeetham. Built with Flutter and Firebase.
 
-**Scope of this phase:** broadcast/scan mechanism + foreground-only session
-termination + local-only "sent successfully" confirmation (Option 1).
-True delivery acknowledgment (Option 2) is intentionally deferred.
+[![CI Pipeline](https://github.com/priyanrajj-hub/attendance-ble-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/priyanrajj-hub/attendance-ble-platform/actions/workflows/ci.yml)
 
-## What's in this zip
+---
 
+## Architecture Overview (Decision D2)
+
+The platform operates on an inverted beacon model:
+1. **Faculty Broadcaster:** The faculty device starts a classroom session and broadcasts a rotating 128-bit BLE Service UUID. The UUID consists of a 12-byte fixed institutional namespace and a 4-byte rotating cryptographic nonce generated via `Random.secure()`.
+2. **Rotating Token Engine:** The nonce rotates every 20 seconds. The faculty device writes `{code, prevCode, rotatedAt: serverTimestamp}` to Firestore at `sessions/{sid}/live/current`, then updates its BLE peripheral advertisement.
+3. **Student Scanner & Attendance Claim:** The student device verifies biometric presence, scans for the institutional beacon, records the rotating nonce with mean RSSI, and submits the claim to `sessions/{sid}/attendance/{uid}`.
+4. **Zero-Trust Firestore Security Rules:** The Firestore security rules validate that the submitted nonce matches `current.code` or `current.prevCode`, that the student is enrolled, that the session is open, that the device UUID matches the student's registered hardware binding, and that the RSSI is within physical classroom thresholds.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Faculty as Faculty Device
+    participant Firestore as Firebase Firestore
+    actor Student as Student Device
+
+    Faculty->>Firestore: Create sessions/{sid} (status: open, endsAt <= 30m)
+    loop Every 20 Seconds
+        Faculty->>Firestore: Write sessions/{sid}/live/current {code, prevCode, rotatedAt}
+        Faculty->>Faculty: Restart BLE Peripheral Advert (UUID: Namespace + Code)
+    end
+
+    Note over Student: Biometric Prompt (biometricOnly: true)
+    Student->>Student: Verify Local Biometrics & Read Device UUID
+    Student->>Student: Scan BLE for Namespace (>= 2 sightings within 6s)
+    Student->>Firestore: Create sessions/{sid}/attendance/{uid} {code, rssi, deviceId, markedAt}
+    Note over Firestore: Security Rules: Valid Code? Enrolled? Device Match? RSSI in range?
+    Firestore-->>Student: 200 OK (Attendance Recorded)
+    Firestore-->>Faculty: Live Roster Snapshot Stream
 ```
-attendance_ble_test/
-├── pubspec.yaml
-├── lib/
-│   ├── main.dart
-│   ├── screens/
-│   │   ├── role_select_screen.dart
-│   │   ├── student_screen.dart
-│   │   └── faculty_screen.dart
-│   ├── ble/
-│   │   ├── ble_advertiser.dart
-│   │   ├── ble_scanner.dart
-│   │   └── ble_constants.dart
-│   └── models/
-│       └── detected_device.dart
-├── android_manifest_additions.xml   (reference only — see setup below)
-├── ios_info_plist_additions.xml     (reference only — see setup below)
-└── README.md
+
+---
+
+## Role Matrix & Workflows
+
+| Role | Allowed Email Domain | Permissions & Flow |
+| :--- | :--- | :--- |
+| **Student** | `@ch.students.amrita.edu` | Self-registration, biometrics verification, BLE scanner check-in, collection-group attendance history view. |
+| **Faculty** | `@ch.amrita.edu` | Self-registration, assigned courses dashboard, live session creation & code rotator broadcaster, live roster inspection, manual overrides. |
+| **Admin** | Console-promoted | User approvals/rejections with reason, suspension, hardware device resets, course creation, student enrollment. |
+
+---
+
+## Security Model & Honest Technical Limitations
+
+No automated wireless attendance system can provide 100% cryptographic proof of physical human presence without trusted hardware constraints. This platform provides multi-layered defenses with the following honest operational boundaries:
+
+### Mitigations
+1. **Rotating Ephemeral Nonces:** The BLE broadcast rotating code changes every 20 seconds. A code intercepted in one window becomes invalid shortly thereafter.
+2. **Grace Overlap:** Security rules accept `code` and `prevCode` (a ~40-second total validity window) to account for RF packet loss, scan latency, and device clock drift.
+3. **Hardware Device Binding:** On first login, a UUIDv4 is stored in `flutter_secure_storage` and committed to `users/{uid}.deviceId` once. Subsequent check-ins require this device ID, preventing account-sharing across phones without administrator reset.
+4. **Biometric Presence Gate:** Every check-in strictly requires `biometricOnly: true` (no device PIN fallback).
+5. **Physical RSSI Gate:** Claims are rejected by client validation if mean signal strength falls below `-80 dBm`.
+6. **Audit Trail for Overrides:** Any manual faculty attendance override requires a recorded reason and records the faculty member's UID.
+
+### Known Attack Surfaces & Limitations
+- **Relay over messaging apps:** If a student physically inside the classroom relays the 8-hex rotating code to an absent peer over chat or messaging, the absent peer could theoretically submit the code within the ~40-second validity window if their device is bound and their IP is unblocked.
+- **Biometrics Scope:** `local_auth` returns a boolean indicating *someone enrolled in the phone's OS biometrics* authenticated. It cannot verify that the enrolled fingerprint belongs to the student rather than a friend whose fingerprint was added to the device settings.
+- **Rooted / Modified Devices:** A modified app client running on a rooted device with Frida/Xposed can hook return values or simulate arbitrary RSSI readings.
+
+---
+
+## Setup & Development
+
+### Prerequisites
+- Flutter SDK 3.22+ (`flutter doctor`)
+- OpenJDK 21 LTS (required for Firebase Firestore Emulator)
+- Node.js 20 LTS & Firebase CLI 13+
+
+### Local Emulator Testing
+```bash
+# Run automated Firestore security rules suite (38 test cases)
+cd firestore-tests
+npm ci
+firebase emulators:exec --only firestore "npm test"
+cd ..
+
+# Run Flutter static analysis & unit tests
+flutter analyze --fatal-infos
+flutter test --coverage
 ```
 
-This zip does **not** include the native `android/` and `ios/` project
-folders — those are auto-generated by the Flutter CLI and shouldn't be
-hand-written. Follow the setup steps below to generate them and drop
-these files in.
-
-## Setup
-
-1. **Generate the native project scaffolding.** In an empty folder:
+### Creating the First Administrator
+In Firebase Console > Firestore Database > `users` collection:
+1. Locate the document matching your administrator's Firebase Auth UID.
+2. Set:
+   ```json
+   {
+     "name": "System Administrator",
+     "email": "admin@ch.amrita.edu",
+     "role": "admin",
+     "status": "verified",
+     "createdAt": "<Timestamp>"
+   }
    ```
-   flutter create attendance_ble_test
-   ```
-2. **Replace** the generated `pubspec.yaml` and `lib/` folder with the
-   ones from this zip.
-3. **Add Android permissions:** open
-   `android/app/src/main/AndroidManifest.xml` and merge in the contents
-   of `android_manifest_additions.xml` (inside the `<manifest>` tag).
-4. **Add iOS permissions:** open `ios/Runner/Info.plist` and merge in
-   the contents of `ios_info_plist_additions.xml` (inside the `<dict>`
-   tag).
-5. **Set your Android minSdkVersion.** BLE peripheral (advertising)
-   support needs API 26+. In `android/app/build.gradle`, set:
-   ```
-   minSdkVersion 26
-   ```
-6. Fetch dependencies:
-   ```
-   flutter pub get
-   ```
-7. Run on **two separate physical phones** — one as Student, one as
-   Faculty. BLE does not behave reliably (or at all, for peripheral
-   mode) on emulators/simulators, so this step needs real hardware.
 
-## How to test
-
-1. On Phone A: launch app → tap **"I'm Faculty"** → **"Start Scanning"**.
-2. On Phone B: launch app → tap **"I'm a Student"** → enter a student ID
-   (defaults to `STU001`) → **"Start Broadcasting"**.
-3. Phone B should show **"UUID sent successfully"** — this confirms the
-   broadcast started locally, not that Phone A actually received it.
-4. Check Phone A's list — it should show `STU001` with a live RSSI value
-   and "last seen" timer, confirming the round trip actually works.
-5. **Test the foreground-lock requirement:** while Phone B is
-   broadcasting, switch to another app or lock the screen. Broadcasting
-   should stop immediately and the status message should change to
-   "Session terminated — app was backgrounded."
-6. Walk Phone B around — same desk, across the room, next room, through
-   a wall — and watch how the RSSI value on Phone A changes. This is
-   the data you need to decide on a "present" threshold later.
-7. Try a second student device broadcasting a different ID at the same
-   time, and confirm Phone A tracks both independently.
-
-## Known things to expect
-
-- RSSI will fluctuate even when the phone doesn't move — this is normal
-  BLE behavior, not a bug. Note the *range* it fluctuates within at each
-  distance, not a single number.
-- iOS may take a moment longer to surface advertisements in scan
-  results than Android — timing differences here are expected at this
-  stage.
-- If permissions are denied on first launch, some Android versions
-  require also enabling Location services (not just granting the
-  permission) for BLE scanning to return results.
-
-## Next steps after this test
-
-- Record RSSI-vs-distance observations per room to inform your
-  proximity threshold logic.
-- Once detection is proven reliable, move to Option 2 (real
-  faculty→student acknowledgment) before wiring in login, the 5-minute
-  session window, and the backend.
+### Production Release Build
+```bash
+# Build release APK split by ABI with symbol obfuscation
+flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols
+```
+Build outputs:
+- `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk`
+- `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
+- `build/app/outputs/flutter-apk/app-x86_64-release.apk`
