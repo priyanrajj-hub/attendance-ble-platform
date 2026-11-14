@@ -1,4 +1,0 @@
-# Strict Environment Folder Security
-# All environment configurations, secrets, and credentials in this folder are completely protected from git tracking.
-*
-!.gitignore
