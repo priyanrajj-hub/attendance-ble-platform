@@ -1,78 +1,64 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../models/user_role.dart';
 import '../providers/auth_provider.dart';
+import '../screens/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/auth/email_verification_screen.dart';
 import '../screens/auth/pending_approval_screen.dart';
+import '../screens/auth/rejected_screen.dart';
+import '../screens/auth/suspended_screen.dart';
 import '../screens/admin/admin_approval_screen.dart';
 import '../screens/student/student_home_screen.dart';
 import '../screens/student/attendance_history_screen.dart';
 import '../screens/faculty/faculty_courses_screen.dart';
 import '../screens/faculty/faculty_session_screen.dart';
+import 'redirect_resolver.dart';
+
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterNotifier(this._ref) {
+    _ref.listen(authStateChangesProvider, (_, __) => notifyListeners());
+    _ref.listen(userProfileProvider, (_, __) => notifyListeners());
+  }
+}
+
+final routerNotifierProvider = Provider<RouterNotifier>((ref) {
+  return RouterNotifier(ref);
+});
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateChangesProvider);
-  final profileState = ref.watch(userProfileProvider);
+  final notifier = ref.watch(routerNotifierProvider);
 
   return GoRouter(
-    initialLocation: '/login',
+    initialLocation: '/splash',
+    refreshListenable: notifier,
     debugLogDiagnostics: false,
     redirect: (BuildContext context, GoRouterState state) {
-      final loc = state.matchedLocation;
+      final authAsync = ref.read(authStateChangesProvider);
+      final profileAsync = ref.read(userProfileProvider);
 
-      final user = authState.value;
-      final profile = profileState.value;
-      final isAuthRoute = loc == '/login' || loc == '/register';
+      final user = authAsync.value;
+      final isAuthenticated = user != null;
+      final isEmailVerified = user?.emailVerified ?? false;
+      final isProfileLoading = isAuthenticated && isEmailVerified && profileAsync.isLoading;
+      final profile = profileAsync.value;
 
-      // 1. Unauthenticated users can only visit login or register
-      if (user == null) {
-        return isAuthRoute ? null : '/login';
-      }
-
-      // 2. Email verification gate
-      if (!user.emailVerified) {
-        return loc == '/verify-email' ? null : '/verify-email';
-      }
-
-      // If user is authenticated and verified, redirect away from auth routes
-      if (isAuthRoute || loc == '/verify-email') {
-        if (profile == null || !profile.isVerified) {
-          return '/pending-approval';
-        }
-        switch (profile.role) {
-          case UserRole.student:
-            return '/student';
-          case UserRole.faculty:
-            return '/faculty';
-          case UserRole.admin:
-            return '/admin';
-        }
-      }
-
-      // 3. Admin approval gate
-      if (profile != null && !profile.isVerified) {
-        return loc == '/pending-approval' ? null : '/pending-approval';
-      }
-
-      // 4. Role-based routing guards
-      if (profile != null && profile.isVerified) {
-        if (profile.role == UserRole.student && (loc.startsWith('/faculty') || loc.startsWith('/admin'))) {
-          return '/student';
-        }
-        if (profile.role == UserRole.faculty && (loc.startsWith('/student') || loc.startsWith('/admin'))) {
-          return '/faculty';
-        }
-        if (profile.role == UserRole.admin && (loc.startsWith('/student') || loc.startsWith('/faculty'))) {
-          return '/admin';
-        }
-      }
-
-      return null;
+      return RedirectResolver.resolveRedirect(
+        isAuthenticated: isAuthenticated,
+        isEmailVerified: isEmailVerified,
+        isProfileLoading: isProfileLoading,
+        profile: profile,
+        location: state.matchedLocation,
+      );
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
@@ -88,6 +74,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/pending-approval',
         builder: (context, state) => const PendingApprovalScreen(),
+      ),
+      GoRoute(
+        path: '/rejected',
+        builder: (context, state) => const RejectedScreen(),
+      ),
+      GoRoute(
+        path: '/suspended',
+        builder: (context, state) => const SuspendedScreen(),
       ),
       GoRoute(
         path: '/admin',
@@ -110,8 +104,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'session/:courseId',
             builder: (context, state) {
-              final courseId = state.pathParameters['courseId'] ?? 'CSE450';
-              final courseName = state.uri.queryParameters['name'] ?? 'Mobile Computing (CSE450)';
+              final courseId = state.pathParameters['courseId'] ?? '';
+              final courseName = state.uri.queryParameters['name'] ?? 'Class Session';
               return FacultySessionScreen(courseId: courseId, courseName: courseName);
             },
           ),
