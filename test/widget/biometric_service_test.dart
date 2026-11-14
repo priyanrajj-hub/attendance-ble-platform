@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:attendance_ble_test/services/biometric_service.dart';
+import 'package:amrita_ble_attendance/services/biometric_service.dart';
 
 void main() {
   group('BiometricService Anti-Proxy Enforcement Tests', () {

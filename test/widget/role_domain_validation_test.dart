@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:attendance_ble_test/models/user_role.dart';
-import 'package:attendance_ble_test/models/user_profile.dart';
+import 'package:amrita_ble_attendance/models/user_role.dart';
+import 'package:amrita_ble_attendance/models/user_profile.dart';
 
 void main() {
   group('Role and Institutional Domain Validation Tests', () {

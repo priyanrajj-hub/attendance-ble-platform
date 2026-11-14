@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.attendance.ble.attendance_ble_test"
+    namespace = "edu.amrita.attendance"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.attendance.ble.attendance_ble_test"
+        applicationId = "edu.amrita.attendance"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -47,22 +47,6 @@ android {
     }
 }
 
-
-
 flutter {
     source = "../.."
 }
-
-// Strict Google Services enforcement:
-// Non-spike / production branch requires valid Firebase configuration.
-// If google-services.json is missing, fail loudly with a fatal GradleException.
-if (!file("google-services.json").exists()) {
-    throw GradleException(
-        "\n=======================================================================\n" +
-        "FATAL: android/app/google-services.json is missing!\n" +
-        "Production builds require a valid Firebase configuration file.\n" +
-        "Please copy your google-services.json into android/app/ before building.\n" +
-        "=======================================================================\n"
-    )
-}
-apply(plugin = "com.google.gms.google-services")

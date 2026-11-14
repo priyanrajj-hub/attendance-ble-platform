@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:attendance_ble_test/models/user_role.dart';
-import 'package:attendance_ble_test/providers/proximity_provider.dart';
+import 'package:amrita_ble_attendance/models/user_role.dart';
+import 'package:amrita_ble_attendance/providers/proximity_provider.dart';
 
 /// Test double of ProximityProvider.
 /// Isolated in test/ directory so it is never packaged into release APK binaries.

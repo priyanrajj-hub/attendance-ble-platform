@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:attendance_ble_test/repositories/admin_approval_repository.dart';
-import 'package:attendance_ble_test/repositories/fake_admin_approval_repository.dart';
+import 'package:amrita_ble_attendance/repositories/admin_approval_repository.dart';
+import 'package:amrita_ble_attendance/repositories/fake_admin_approval_repository.dart';
 
 void main() {
   group('AdminApprovalRepository Gate 1 Contract Tests', () {

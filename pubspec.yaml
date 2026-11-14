@@ -1,7 +1,7 @@
-name: attendance_ble_test
-description: "BLE proximity detection test — Phase 1 (Option 1: local-only broadcast confirmation)"
+name: amrita_ble_attendance
+description: "Amrita Attendance — BLE proximity attendance platform"
 publish_to: "none"
-version: 0.1.0
+version: 1.0.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -12,17 +12,16 @@ dependencies:
   flutter_riverpod: ^2.6.1
   go_router: ^14.6.2
   intl: ^0.19.0
-  flutter_blue_plus: ^1.32.12 # Faculty side — BLE scanning (central role)
-  flutter_ble_peripheral: ^1.2.5 # Student side — BLE advertising (peripheral role)
-  permission_handler: ^11.3.1 # Runtime Bluetooth/location permissions
-  firebase_core: ^3.12.1 # Firebase initialization
-  firebase_auth: ^5.5.1 # Email/password authentication
-  cloud_firestore: ^5.6.5 # User profiles, pending verification status
-  firebase_storage: ^12.4.4 # Profile photo uploads
-  local_auth: ^2.3.0 # Biometric (fingerprint/face) second factor
-  image_picker: ^1.1.2 # Profile photo selection during registration
-  cloud_functions: ^5.1.1 # Call Firebase Cloud Functions for verification
-  crypto: ^3.0.3 # HMAC and SHA256 utilities
+  flutter_blue_plus: ^1.32.12
+  flutter_ble_peripheral: ^1.2.5
+  permission_handler: ^11.3.1
+  firebase_core: ^3.12.1
+  firebase_auth: ^5.5.1
+  cloud_firestore: ^5.6.5
+  local_auth: ^2.3.0
+  crypto: ^3.0.3
+  wakelock_plus: ^1.2.8
+  flutter_secure_storage: ^9.2.2
 
 dev_dependencies:
   flutter_test:
