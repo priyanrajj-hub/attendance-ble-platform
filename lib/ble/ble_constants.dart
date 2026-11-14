@@ -1,10 +1,38 @@
 class BleConstants {
-  /// Custom service UUID for this app. The faculty scanner filters on this
-  /// so it ignores unrelated BLE devices nearby (headphones, smartwatches, etc).
-  static const String serviceUuid = "0000b81d-0000-1000-8000-00805f9b34fb";
+  /// 12-byte fixed app namespace: "AMRTBLE" padded with zeros: 41 4D 52 54 42 4C 45 00 00 00 00 00
+  static const String namespaceHex = '414d5254424c450000000000';
 
-  /// Manufacturer ID used to embed the student ID inside the advertisement
-  /// payload. 0xFFFF is reserved for prototyping/testing use — swap this
-  /// for a registered manufacturer ID before any real deployment.
-  static const int manufacturerId = 0xFFFF;
+  /// Standard default RSSI threshold for indoor physical classroom proximity.
+  static const int defaultMinRssi = -80;
+
+  /// Beacon rotation period in seconds.
+  static const int rotationPeriodSeconds = 20;
+
+  /// Maximum scan duration in seconds before timing out.
+  static const int scanTimeoutSeconds = 10;
+
+  /// Minimum consecutive sightings required within window.
+  static const int requiredSightings = 2;
+
+  /// Window in seconds within which required sightings must occur.
+  static const int sightingWindowSeconds = 6;
+
+  /// Assembles a standard 128-bit UUID (8-4-4-4-12 format) from namespace + 8-hex rotating code.
+  static String buildBeaconUuid(String code8Hex) {
+    final cleanCode = code8Hex.replaceAll(RegExp(r'[^0-9a-fA-F]'), '').toLowerCase();
+    if (cleanCode.length != 8) {
+      throw ArgumentError('Rotating code must be exactly 8 hex characters: $code8Hex');
+    }
+    // 414d5254-424c-4500-0000-0000 + 8-char code
+    return '414d5254-424c-4500-0000-0000$cleanCode';
+  }
+
+  /// Extracts the 8-hex code from an advertisement UUID if it matches the app namespace.
+  static String? extractCode(String uuidString) {
+    final clean = uuidString.replaceAll('-', '').toLowerCase();
+    if (clean.length == 32 && clean.startsWith(namespaceHex)) {
+      return clean.substring(24, 32);
+    }
+    return null;
+  }
 }
