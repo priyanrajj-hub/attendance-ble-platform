@@ -166,6 +166,13 @@ class StudentCheckInController extends StateNotifier<CheckInState> {
     }
 
     try {
+      // Ensure hardware device public key is registered with backend
+      final pem = await _deviceBindingService.getPublicKeyPem();
+      await _apiService.registerDevice(
+        publicKeyPem: pem,
+        platform: 'android',
+      );
+
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final signature = await _deviceBindingService.signPayload(
         sessionId: sessionId,

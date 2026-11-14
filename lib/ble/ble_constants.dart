@@ -45,10 +45,15 @@ class BleConstants {
     return null;
   }
 
-  /// Extracts the challenge from a UUID string, supporting both 128-bit challenge UUIDs and legacy namespaced UUIDs.
+  /// Extracts the challenge from a UUID string, rejecting foreign Bluetooth SIG standard UUIDs
+  /// and extracting either 128-bit challenges or app-namespaced codes.
   static String? extractChallenge(String uuidString) {
     final clean = uuidString.replaceAll('-', '').toLowerCase();
     if (clean.length == 32) {
+      // Reject Bluetooth SIG standard base UUIDs (0000xxxx-0000-1000-8000-00805f9b34fb)
+      if (clean.contains('00001000800000805f9b34fb')) {
+        return null;
+      }
       if (clean.startsWith(namespaceHex)) {
         return clean.substring(24, 32);
       }

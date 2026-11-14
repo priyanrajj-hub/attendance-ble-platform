@@ -176,6 +176,22 @@ class AttendanceService:
                 detail="Attendance registration conflict.",
             )
 
+        # 9. Asynchronously project verified attendance into Firestore for live UI synchronization
+        try:
+            from firebase_admin import firestore
+            fs = firestore.client()
+            fs.collection("sessions").document(str(sid)).collection("attendance").document(user_record.firebase_uid).set({
+                "studentUid": user_record.firebase_uid,
+                "studentName": user_record.display_name or user_record.roll_number or "Student",
+                "rollNo": user_record.roll_number or "",
+                "markedAt": now,
+                "method": new_record.method,
+                "rssi": payload.observed_rssi,
+                "status": "present",
+            })
+        except Exception:
+            pass  # PostgreSQL is the sole authoritative attendance ledger
+
         return CheckInResponse(
             attendance_id=str(new_record.id),
             session_id=str(new_record.session_id),

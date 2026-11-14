@@ -73,6 +73,10 @@ class AttendanceApiService {
         _client = client ?? HttpClient();
 
   static String _resolveDefaultBaseUrl() {
+    const fromEnv = String.fromEnvironment('API_BASE_URL');
+    if (fromEnv.isNotEmpty) {
+      return fromEnv;
+    }
     // Android emulator loops back to host 10.0.2.2; real device/web uses localhost or LAN IP
     if (!kIsWeb && Platform.isAndroid) {
       return 'http://10.0.2.2:8000';
@@ -184,6 +188,74 @@ class AttendanceApiService {
       return response.statusCode >= 200 && response.statusCode < 300;
     } catch (_) {}
     return false;
+  }
+
+  Future<bool> registerDevice({
+    required String publicKeyPem,
+    required String platform,
+    String? deviceModel,
+    String? osVersion,
+  }) async {
+    final token = await _auth.currentUser?.getIdToken();
+    final url = Uri.parse('$_baseUrl/api/v1/devices/register');
+
+    try {
+      final request = await _client.postUrl(url);
+      request.headers.set('Content-Type', 'application/json');
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+
+      final payload = {
+        'public_key_pem': publicKeyPem,
+        'platform': platform,
+        'device_model': deviceModel ?? 'Mobile Device',
+        'os_version': osVersion ?? '1.0',
+      };
+
+      request.add(utf8.encode(jsonEncode(payload)));
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {}
+    return false;
+  }
+
+  Future<List<Map<String, dynamic>>> getSessionRoster(String sessionId) async {
+    final token = await _auth.currentUser?.getIdToken();
+    final url = Uri.parse('$_baseUrl/api/v1/sessions/$sessionId/roster');
+
+    try {
+      final request = await _client.getUrl(url);
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      final responseBody = await response.transform(utf8.decoder).join();
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = jsonDecode(responseBody) as List;
+        return decoded.cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<List<Map<String, dynamic>>> getMyAttendanceHistory() async {
+    final token = await _auth.currentUser?.getIdToken();
+    final url = Uri.parse('$_baseUrl/api/v1/attendance/my-history');
+
+    try {
+      final request = await _client.getUrl(url);
+      if (token != null && token.isNotEmpty) {
+        request.headers.set('Authorization', 'Bearer $token');
+      }
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      final responseBody = await response.transform(utf8.decoder).join();
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = jsonDecode(responseBody) as List;
+        return decoded.cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
   }
 }
 

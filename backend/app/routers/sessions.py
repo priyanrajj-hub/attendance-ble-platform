@@ -214,3 +214,54 @@ async def list_active_sessions(
         )
         for s in sessions
     ]
+
+
+@router.get("/{session_id}/roster", summary="Get Live Attendance Roster for Session")
+async def get_session_roster(
+    session_id: str,
+    current_user: AuthenticatedUser = Depends(require_role(["faculty", "admin"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns live enrollment and attendance status for a session directly from PostgreSQL.
+    """
+    try:
+        sid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format.")
+
+    sess_stmt = select(Session).where(Session.id == sid)
+    sess_res = await db.execute(sess_stmt)
+    sess = sess_res.scalar_one_or_none()
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    # Fetch active enrollments with user record
+    enr_stmt = (
+        select(Enrollment, User)
+        .join(User, User.id == Enrollment.student_id)
+        .where(Enrollment.course_id == sess.course_id, Enrollment.status == "active")
+    )
+    enr_res = await db.execute(enr_stmt)
+    enrollments = enr_res.all()
+
+    att_stmt = select(AttendanceRecord).where(AttendanceRecord.session_id == sid)
+    att_res = await db.execute(att_stmt)
+    att_by_student = {r.student_id: r for r in att_res.scalars().all()}
+
+    roster = []
+    for enr, student in enrollments:
+        att = att_by_student.get(student.id)
+        roster.append({
+            "student_id": str(student.id),
+            "student_uid": student.firebase_uid,
+            "student_name": student.display_name or student.roll_number,
+            "roll_no": student.roll_number,
+            "is_present": att is not None,
+            "status": att.status if att else "absent",
+            "marked_at": att.verified_at if att else None,
+            "method": att.method if att else None,
+            "rssi_observed": att.rssi_observed if att else None,
+            "signature_verified": att.signature_verified if att else False,
+        })
+    return roster

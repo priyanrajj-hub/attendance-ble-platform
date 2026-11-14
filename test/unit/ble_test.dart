@@ -70,6 +70,9 @@ void main() {
       const foreignUuid = '0000180d-0000-1000-8000-00805f9b34fb';
       final extracted = BleConstants.extractCode(foreignUuid);
       expect(extracted, isNull);
+
+      final challenge = BleConstants.extractChallenge(foreignUuid);
+      expect(challenge, isNull);
     });
 
     test('generate8HexCode produces unique 8-character hex strings', () {

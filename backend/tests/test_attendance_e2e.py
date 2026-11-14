@@ -205,6 +205,31 @@ async def test_device_registration_and_signature_e2e(
     assert replay_data["already_marked"] is True
     assert replay_data["attendance_id"] == str(rec.id)
 
+    # 7. Verify My-History Endpoint (Student source of truth)
+    hist_res = await client.get("/api/v1/attendance/my-history")
+    assert hist_res.status_code == 200
+    hist_items = hist_res.json()
+    assert len(hist_items) >= 1
+    assert hist_items[0]["session_id"] == str(sess.id)
+    assert hist_items[0]["status"] == "present"
+
+    # 8. Verify Session Roster Endpoint (Faculty source of truth)
+    faculty_user = AuthenticatedUser(
+        uid=e2e_setup["faculty"].firebase_uid,
+        email=e2e_setup["faculty"].email,
+        role="faculty",
+        status="verified",
+        display_name="Dr. E2E Faculty",
+    )
+    app.dependency_overrides[get_current_user] = lambda: faculty_user
+    roster_res = await client.get(f"/api/v1/sessions/{sess.id}/roster")
+    assert roster_res.status_code == 200
+    roster_items = roster_res.json()
+    assert len(roster_items) >= 1
+    student_roster = next(r for r in roster_items if r["student_uid"] == student_auth_user.uid)
+    assert student_roster["is_present"] is True
+    assert student_roster["status"] == "present"
+
 
 @pytest.mark.asyncio
 async def test_forged_device_signature_rejected(

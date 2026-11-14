@@ -75,10 +75,19 @@ class CodeRotator {
 
     await _rotateAndAdvertise();
 
-    _rotationTimer = Timer.periodic(
-      const Duration(seconds: BleConstants.rotationPeriodSeconds),
-      (_) => _rotateAndAdvertise(),
-    );
+    // Synchronize rotation ticks to the authoritative server epoch step boundaries
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final periodMs = BleConstants.rotationPeriodSeconds * 1000;
+    final msUntilNextStep = periodMs - (nowMs % periodMs);
+
+    _rotationTimer = Timer(Duration(milliseconds: msUntilNextStep), () {
+      if (_isDisposed) return;
+      _rotateAndAdvertise();
+      _rotationTimer = Timer.periodic(
+        const Duration(seconds: BleConstants.rotationPeriodSeconds),
+        (_) => _rotateAndAdvertise(),
+      );
+    });
   }
 
   String _deriveNextChallenge() {
@@ -97,32 +106,35 @@ class CodeRotator {
       _prevCode = _currentCode;
       _currentCode = _deriveNextChallenge();
 
-      // 1. Write rotated code projection to Firestore
-      final liveRef = _firestore
-          .collection('sessions')
-          .doc(sessionId)
-          .collection('live')
-          .doc('current');
-
-      final data = <String, dynamic>{
-        'code': _currentCode,
-        'rotatedAt': FieldValue.serverTimestamp(),
-      };
-      if (_prevCode != null) {
-        data['prevCode'] = _prevCode;
-      }
-
-      await liveRef.set(data);
-
-      // 2. Restart advertising with 128-bit challenge UUID
+      // 1. Restart physical BLE advertising IMMEDIATELY (Primary Attendance Channel)
       final uuid = _currentCode!.length == 32
           ? BleConstants.buildChallengeUuid(_currentCode!)
           : BleConstants.buildBeaconUuid(_currentCode!);
       await _broadcaster.start(uuid);
-
       _setHealth(BeaconHealth.advertising);
+
+      // 2. Asynchronously write secondary projection to Firestore (non-blocking)
+      try {
+        final liveRef = _firestore
+            .collection('sessions')
+            .doc(sessionId)
+            .collection('live')
+            .doc('current');
+
+        final data = <String, dynamic>{
+          'code': _currentCode,
+          'rotatedAt': FieldValue.serverTimestamp(),
+        };
+        if (_prevCode != null) {
+          data['prevCode'] = _prevCode;
+        }
+
+        await liveRef.set(data);
+      } catch (firestoreError) {
+        debugPrint('Firestore live rotation projection non-fatal notice: $firestoreError');
+      }
     } catch (e) {
-      debugPrint('Code rotation failure: $e');
+      debugPrint('Physical BLE broadcast failure: $e');
       _setHealth(BeaconHealth.unhealthy, error: e.toString());
     } finally {
       _isRotating = false;
