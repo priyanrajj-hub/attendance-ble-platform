@@ -1,0 +1,108 @@
+# =========================
+# Flutter / Dart
+# =========================
+
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+build/
+android/build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+**/GeneratedPluginRegistrant.*
+
+# =========================
+# IDE & OS
+# =========================
+
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.gemini/
+.agents/
+.claude/
+coverage/
+
+# =========================
+# Environment variables
+# =========================
+
+.env
+.env.*
+*.env
+env/.env*
+backend/env/.env*
+!.env.example
+!**/.env.example
+.venv/
+backend/.venv/
+
+# =========================
+# Android
+# =========================
+
+android/.gradle/
+android/local.properties
+android/key.properties
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/**/.cxx/
+android/app/google-services.json
+*.jks
+*.keystore
+
+# =========================
+# iOS
+# =========================
+
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/ephemeral/
+ios/Flutter/Generated.xcconfig
+ios/Runner/GoogleService-Info.plist
+
+# =========================
+# Firebase & Emulator logs
+# =========================
+
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# =========================
+# Node & Dependencies
+# =========================
+
+node_modules/
+npm-debug.log*
+
+# =========================
+# Logs, Symbols & Temp Files
+# =========================
+
+*.log
+*.tmp
+*.bak
+*.apk
+*.aab
+build/symbols/
+__pycache__/
+*.pyc
+
+# =========================
+# Secrets & Credentials
+# =========================
+
+secrets/
+credentials/
+credentials.json
+service-account*.json
+*serviceAccount*.json
+*firebase-admin*.json
+*.pem
+*.p12
