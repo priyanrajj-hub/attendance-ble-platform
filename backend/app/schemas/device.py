@@ -9,6 +9,15 @@ class DeviceRegisterPayload(BaseModel):
     platform: str = Field(..., description="Operating system platform ('android' or 'ios')")
     device_model: Optional[str] = Field(None, description="Hardware model name")
     os_version: Optional[str] = Field(None, description="OS build version")
+    attestation_statement: Optional[str] = Field(None, description="Base64-encoded hardware attestation statement or certificate chain")
+    attestation_type: Optional[str] = Field("none", description="'key_attestation', 'play_integrity', 'app_attest', or 'none'")
+    attestation_challenge: Optional[str] = Field(None, description="Server challenge nonce verified in attestation")
+
+
+class AttestationChallengeResponse(BaseModel):
+    challenge: str
+    expires_at: datetime
+    validity_seconds: int
 
 
 class DeviceRegisterResponse(BaseModel):

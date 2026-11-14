@@ -60,6 +60,19 @@ class AttendanceApiResponse {
 }
 
 class AttendanceApiService {
+  static String? _runtimeOverrideUrl;
+
+  static void setRuntimeOverrideUrl(String url) {
+    final clean = url.trim().replaceAll(RegExp(r'/+$'), '');
+    if (clean.isNotEmpty) {
+      _runtimeOverrideUrl = clean;
+    } else {
+      _runtimeOverrideUrl = null;
+    }
+  }
+
+  static String get activeBaseUrl => _runtimeOverrideUrl ?? _resolveDefaultBaseUrl();
+
   final String _baseUrl;
   final FirebaseAuth _auth;
   final HttpClient _client;
@@ -68,9 +81,19 @@ class AttendanceApiService {
     String? baseUrl,
     FirebaseAuth? auth,
     HttpClient? client,
-  })  : _baseUrl = baseUrl ?? _resolveDefaultBaseUrl(),
+  })  : _baseUrl = baseUrl ?? activeBaseUrl,
         _auth = auth ?? FirebaseAuth.instance,
-        _client = client ?? HttpClient();
+        _client = client ?? _createConfiguredClient();
+
+  static HttpClient _createConfiguredClient() {
+    final client = HttpClient();
+    // In debug mode, allow self-signed certificates and local LAN IP endpoints
+    assert(() {
+      client.badCertificateCallback = (cert, host, port) => true;
+      return true;
+    }());
+    return client;
+  }
 
   static String _resolveDefaultBaseUrl() {
     const fromEnv = String.fromEnvironment('API_BASE_URL');

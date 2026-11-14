@@ -9,6 +9,8 @@ from app.models.override import Override
 from app.models.dispute import Dispute
 from app.models.audit_log import AuditLog
 from app.models.challenge import Challenge
+from app.models.consumed_nonce import ConsumedNonce
+from app.models.device_attestation_challenge import DeviceAttestationChallenge
 
 __all__ = [
     "Institution",
@@ -22,4 +24,6 @@ __all__ = [
     "Dispute",
     "AuditLog",
     "Challenge",
+    "ConsumedNonce",
+    "DeviceAttestationChallenge",
 ]

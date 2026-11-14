@@ -18,6 +18,9 @@ from app.models.enrollment import Enrollment
 from app.models.session import Session
 from app.models.device import Device
 from app.models.attendance_record import AttendanceRecord
+from app.models.override import Override
+from app.models.audit_log import AuditLog
+from app.models.consumed_nonce import ConsumedNonce
 from app.services.challenge_service import ChallengeService
 
 
@@ -483,4 +486,213 @@ async def test_faculty_manual_override_unauthorized_for_other_faculty(
         },
     )
     assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_weak_rssi_below_threshold_rejected(
+    client: AsyncClient,
+    e2e_setup: dict,
+    student_auth_user: AuthenticatedUser,
+    ec_keypair: tuple,
+):
+    priv_key, pub_pem = ec_keypair
+    app.dependency_overrides[get_current_user] = lambda: student_auth_user
+
+    # Register device
+    reg_res = await client.post(
+        "/api/v1/devices/register",
+        json={
+            "public_key_pem": pub_pem,
+            "platform": "android",
+            "device_model": "Test Phone",
+            "os_version": "Android 14",
+        },
+    )
+    assert reg_res.status_code == 201
+
+    sess = e2e_setup["session"]  # rssi_threshold is -75
+    now = datetime.now(timezone.utc)
+    step = int(now.timestamp()) // ChallengeService.ROTATION_PERIOD_SECONDS
+    code = ChallengeService.compute_challenge(sess.secret_hash, str(sess.id), step)
+
+    now_ms = int(now.timestamp() * 1000)
+    canonical = f"{sess.id}:{code}:{now_ms}".encode("utf-8")
+    sig = priv_key.sign(canonical, ec.ECDSA(hashes.SHA256()))
+
+    # Weak RSSI: -85 dBm is weaker than session threshold -75 dBm
+    res = await client.post(
+        "/api/v1/attendance/check-in",
+        json={
+            "session_id": str(sess.id),
+            "ephemeral_nonce": code,
+            "observed_rssi": -85,
+            "client_timestamp": now_ms,
+            "signature": sig.hex(),
+        },
+    )
+    assert res.status_code == 403
+    assert "proximity threshold" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_invalid_rssi_range_rejected(
+    client: AsyncClient,
+    e2e_setup: dict,
+    student_auth_user: AuthenticatedUser,
+):
+    app.dependency_overrides[get_current_user] = lambda: student_auth_user
+    sess = e2e_setup["session"]
+
+    # Absurd positive RSSI: +10 dBm
+    res = await client.post(
+        "/api/v1/attendance/check-in",
+        json={
+            "session_id": str(sess.id),
+            "ephemeral_nonce": "12345678123456781234567812345678",
+            "observed_rssi": 10,
+        },
+    )
+    assert res.status_code == 400
+    assert "invalid" in res.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_future_client_timestamp_rejected(
+    client: AsyncClient,
+    e2e_setup: dict,
+    student_auth_user: AuthenticatedUser,
+    ec_keypair: tuple,
+):
+    priv_key, pub_pem = ec_keypair
+    app.dependency_overrides[get_current_user] = lambda: student_auth_user
+
+    sess = e2e_setup["session"]
+    now = datetime.now(timezone.utc)
+    step = int(now.timestamp()) // ChallengeService.ROTATION_PERIOD_SECONDS
+    code = ChallengeService.compute_challenge(sess.secret_hash, str(sess.id), step)
+
+    # 10 minutes in the future
+    future_ms = int((now + timedelta(minutes=10)).timestamp() * 1000)
+
+    res = await client.post(
+        "/api/v1/attendance/check-in",
+        json={
+            "session_id": str(sess.id),
+            "ephemeral_nonce": code,
+            "observed_rssi": -65,
+            "client_timestamp": future_ms,
+            "signature": "fake_sig",
+        },
+    )
+    assert res.status_code == 400
+    assert "future" in res.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_manual_override_audit_trail_persisted_in_postgresql(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    e2e_setup: dict,
+):
+    faculty = e2e_setup["faculty"]
+    student = e2e_setup["student"]
+    sess = e2e_setup["session"]
+
+    faculty_auth_user = AuthenticatedUser(
+        uid=faculty.firebase_uid,
+        email=faculty.email,
+        role="faculty",
+        status="verified",
+        display_name=faculty.display_name,
+    )
+    app.dependency_overrides[get_current_user] = lambda: faculty_auth_user
+
+    reason = "Student device Bluetooth radio damaged; confirmed seated in row 3."
+    res = await client.post(
+        f"/api/v1/sessions/{sess.id}/manual-override",
+        json={
+            "student_id": student.firebase_uid,
+            "reason": reason,
+        },
+    )
+    assert res.status_code == 200
+
+    # 1. Verify AttendanceRecord in PostgreSQL retains reason and marked_by
+    att_stmt = select(AttendanceRecord).where(
+        AttendanceRecord.session_id == sess.id,
+        AttendanceRecord.student_id == student.id,
+    )
+    att_res = await db_session.execute(att_stmt)
+    rec = att_res.scalar_one_or_none()
+    assert rec is not None
+    assert rec.override_reason == reason
+    assert rec.marked_by == faculty.id
+    assert rec.method == "faculty_manual_override"
+
+    # 2. Verify formal Override audit record
+    ov_stmt = select(Override).where(
+        Override.session_id == sess.id,
+        Override.student_id == student.id,
+    )
+    ov_res = await db_session.execute(ov_stmt)
+    ov = ov_res.scalar_one_or_none()
+    assert ov is not None
+    assert ov.reason == reason
+    assert ov.actor_id == faculty.id
+    assert ov.action == "grant"
+
+    # 3. Verify security AuditLog entry
+    audit_stmt = select(AuditLog).where(
+        AuditLog.action == "manual_override",
+        AuditLog.target_id == str(rec.id),
+    )
+    audit_res = await db_session.execute(audit_stmt)
+    audit = audit_res.scalar_one_or_none()
+    assert audit is not None
+    assert audit.payload["reason"] == reason
+
+
+@pytest.mark.asyncio
+async def test_device_attestation_challenge_and_verification(
+    client: AsyncClient,
+    student_auth_user: AuthenticatedUser,
+    ec_keypair: tuple,
+):
+    priv_key, pub_pem = ec_keypair
+    app.dependency_overrides[get_current_user] = lambda: student_auth_user
+
+    # 1. Request attestation challenge
+    chall_res = await client.post("/api/v1/devices/attestation-challenge")
+    assert chall_res.status_code == 201
+    chall_data = chall_res.json()
+    assert "challenge" in chall_data
+    assert len(chall_data["challenge"]) == 64
+
+    # 2. Register device with invalid challenge -> rejected
+    bad_res = await client.post(
+        "/api/v1/devices/register",
+        json={
+            "public_key_pem": pub_pem,
+            "platform": "android",
+            "attestation_type": "key_attestation",
+            "attestation_statement": "dGVzdF9zdGF0ZW1lbnQ=",
+            "attestation_challenge": "invalid_challenge_nonce_0000000000000000000000000000000000000000",
+        },
+    )
+    assert bad_res.status_code == 400
+    assert "rejected" in bad_res.json()["detail"].lower()
+
+    # 3. Register device without attestation statement -> accepted as key_registered
+    ok_res = await client.post(
+        "/api/v1/devices/register",
+        json={
+            "public_key_pem": pub_pem,
+            "platform": "android",
+            "device_model": "Pixel 8",
+            "os_version": "Android 14",
+        },
+    )
+    assert ok_res.status_code == 201
+    assert ok_res.json()["attestation_status"] == "key_registered"
+
 

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import String, Integer, Boolean, DateTime, ForeignKey, CheckConstraint, UniqueConstraint, Index
+from sqlalchemy import String, Integer, Boolean, DateTime, ForeignKey, CheckConstraint, UniqueConstraint, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.base import Base
@@ -40,7 +40,12 @@ class AttendanceRecord(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     status: Mapped[str] = mapped_column(String(32), default="present", nullable=False)
+    override_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    marked_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     session = relationship("Session", back_populates="attendance_records")
     student = relationship("User", foreign_keys=[student_id])
     device = relationship("Device", foreign_keys=[device_id])
+    marker = relationship("User", foreign_keys=[marked_by])

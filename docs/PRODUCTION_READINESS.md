@@ -11,10 +11,13 @@
 |---|---|---|
 | **Authoritative State Architecture** | **READY** | PostgreSQL 16 is enforced as single source of truth; Firestore is read-only client projection. |
 | **Cryptographic Protocol** | **READY** | 128-bit truncated HMAC-SHA256 challenges synchronized to server epoch steps with replay prevention. |
-| **Device Integrity & Binding** | **READY** | Hardware Keystore keys enrolled; digital signatures mandatory on all check-in payloads. |
+| **Device Integrity & Binding** | **READY** | Two-tier trust: `key_registered` (unattested software) and `hardware_attested` (Android Keymaster OID / App Attest with challenge endpoint). |
+| **Replay & Timestamp Protection** | **READY** | Atomic `consumed_nonces` table, signature hashes, and 10s future / 60s past timestamp drift boundaries. |
+| **Manual Override & Audit** | **READY** | Idempotent `db.begin_nested()` override handling, `overrides` table, and immutable `audit_log` records. |
+| **Network Configuration** | **READY** | Dynamic backend URL configuration dialog in Flutter client for physical handset testing. |
 | **RBAC & Authorization** | **READY** | FastAPI dependencies enforce zero-trust role verification and domain whitelisting. |
 | **Firestore Security Rules** | **READY** | Client direct writes to attendance completely disabled (`allow write: if false;`). |
-| **Code Quality & Test Coverage** | **READY** | `flutter analyze` 0 issues; `flutter test` 36/36 pass; `pytest` 36/36 pass. |
+| **Code Quality & Test Coverage** | **READY** | `flutter analyze` 0 issues; `flutter test` 36/36 pass; `pytest` 41/41 pass. |
 | **Physical Airwave BLE Validation** | **PENDING** | **NOT TESTED** - 0 physical devices connected to host. Requires physical pilot verification. |
 
 ---

@@ -45,7 +45,10 @@
 |  - users (roles, roll numbers)     |  |  - sessions/{id}/live/current (challenges)|
 |  - enrollments (active status)     |  |  - sessions/{id}/attendance/{uid}         |
 |  - attendance_records (UNIQUE UQ)  |  |    (Client writes strictly denied)        |
-|  - devices (keystore public keys)  |  +-------------------------------------------+
+|  - devices (keys & attestation)    |  +-------------------------------------------+
+|  - consumed_nonces (anti-replay)   |
+|  - device_attestation_challenges  |
+|  - overrides & audit_log (audit)   |
 +------------------------------------+
 ```
 
@@ -97,3 +100,33 @@
 - Flutter 3.29.0 / Dart 3.7.0.
 - `flutter_riverpod` (v2), `go_router` (v14), `firebase_core`, `firebase_auth`, `cloud_firestore`.
 - `flutter_blue_plus` (v1.35.3), `flutter_secure_storage` (v9), `local_auth` (v2), `crypto`.
+
+---
+
+## 4. Hardened Security & Anti-Fraud Mechanisms (Phase 4 Updates)
+
+### 4.1 Server-Side RSSI Verification
+- **Validation**: All check-in payloads must include `observed_rssi`. FastAPI strictly rejects values outside `[-120, 0]` dBm with `400 Bad Request`.
+- **Threshold Check**: If `observed_rssi < session.rssi_threshold`, check-in is rejected (`400 Proximity threshold unmet`).
+- **Physical Boundary Acknowledgment**: RSSI alone cannot mathematically guarantee absolute physical presence on compromised/rooted devices without time-of-flight (UWB) or cryptographically signed sensor enclaves. It serves as an active barrier against naive and unmodified remote check-in attempts.
+
+### 4.2 Nonce and Signature Replay Protection
+- **Tracking Table**: `consumed_nonces` table with unique constraints `uq_session_signature_hash` and `uq_session_student_nonce`.
+- **Clock Skew Enforcement**: Student check-in timestamps (`client_timestamp`) must not exceed 10 seconds in the future or 60 seconds in the past relative to authoritative server time.
+- **Atomic Invalidation**: On valid check-in, signature hash and client nonce are committed atomically with the `AttendanceRecord`. Re-submitting the same payload or signature yields `409 Attendance signature or nonce has already been consumed`.
+
+### 4.3 Hardware Device Attestation Pipeline
+- **Attestation Flow**: Clients request a 256-bit cryptographically random challenge via `POST /api/v1/devices/attestation-challenge` (300-second TTL).
+- **Two-Tier Key Trust**:
+  - `key_registered`: Unattested public keys generated on device. Can be used for basic pilot testing.
+  - `hardware_attested`: Keys with verified X.509 certificate chains containing Android Keymaster/KeyMint extension OID `1.3.6.1.4.1.11129.2.1.17` rooted in Google Hardware Root CA, or Apple DeviceCheck/App Attest CBOR attestations.
+- **Revocation**: Device public keys can be revoked via `POST /api/v1/devices/{id}/revoke`.
+
+### 4.4 Authoritative Manual Override & Concurrency Protection
+- **Audit Logging**: Manual overrides persist `override_reason` and `marked_by` directly onto `attendance_records`, insert a row into `overrides`, and append an immutable event to `audit_log`.
+- **Concurrency Isolation**: Database operations use nested transaction savepoints (`async with db.begin_nested():`) to catch duplicate check-in collisions (`IntegrityError`) and idempotently update status to `present_override` without throwing 500 errors.
+
+### 4.5 Runtime Network Configuration for Physical Devices
+- **Flutter Client**: Dynamic API host configuration via `AttendanceApiService.setRuntimeOverrideUrl` and `Icons.dns_outlined` dialog on `LoginScreen`.
+- **Certificate Handling**: Debug builds allow self-signed certificates and direct local IP testing, avoiding Android emulator `10.0.2.2` routing traps on physical hardware.
+

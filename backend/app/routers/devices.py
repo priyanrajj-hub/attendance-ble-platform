@@ -14,10 +14,43 @@ from app.schemas.device import (
     DeviceRegisterResponse,
     DevicePublicResponse,
     DeviceRevokePayload,
+    AttestationChallengeResponse,
 )
 from app.services.device_verification_service import DeviceVerificationService
+from app.services.device_attestation_service import DeviceAttestationService
 
 router = APIRouter(prefix="/devices", tags=["Device Registration & Attestation"])
+
+
+@router.post(
+    "/attestation-challenge",
+    response_model=AttestationChallengeResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Issue Hardware Device Attestation Challenge",
+)
+async def issue_attestation_challenge(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Issues an ephemeral 256-bit cryptographic challenge for hardware remote attestation.
+    Valid for 5 minutes.
+    """
+    u_stmt = select(User).where(User.firebase_uid == current_user.uid)
+    u_res = await db.execute(u_stmt)
+    user_record = u_res.scalar_one_or_none()
+    if not user_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found.",
+        )
+
+    record = await DeviceAttestationService.issue_challenge(db, user_record.id)
+    return AttestationChallengeResponse(
+        challenge=record.challenge,
+        expires_at=record.expires_at,
+        validity_seconds=300,
+    )
 
 
 @router.post(
@@ -34,6 +67,7 @@ async def register_device(
     """
     Registers a client device public key (ECDSA or RSA) backed by Android Keystore / iOS Keychain.
     Replaces any previously active device for this user by setting revoked_at.
+    Verifies hardware remote attestation statements if provided.
     """
     # 1. Fetch user record
     u_stmt = select(User).where(User.firebase_uid == current_user.uid)
@@ -61,9 +95,24 @@ async def register_device(
             detail="Platform must be either 'android' or 'ios'.",
         )
 
+    # 3. Evaluate remote hardware attestation if statement provided
+    att_status, att_msg = await DeviceAttestationService.verify_attestation(
+        db,
+        user_record.id,
+        payload.public_key_pem,
+        payload.attestation_statement,
+        payload.attestation_type,
+        payload.attestation_challenge,
+    )
+    if att_status == "attestation_rejected":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Device hardware attestation rejected: {att_msg}",
+        )
+
     now = datetime.now(timezone.utc)
 
-    # 3. Revoke existing active devices for this user
+    # 4. Revoke existing active devices for this user
     active_devices_stmt = select(Device).where(
         Device.user_id == user_record.id,
         Device.revoked_at.is_(None),
@@ -73,7 +122,7 @@ async def register_device(
     for dev in active_devices:
         dev.revoked_at = now
 
-    # 4. Check if this exact public key is already registered
+    # 5. Check if this exact public key is already registered
     existing_fp_stmt = select(Device).where(Device.public_key_fingerprint == fingerprint)
     existing_fp_res = await db.execute(existing_fp_stmt)
     existing_dev = existing_fp_res.scalar_one_or_none()
@@ -88,6 +137,7 @@ async def register_device(
         existing_dev.platform = platform_clean
         existing_dev.device_model = payload.device_model
         existing_dev.os_version = payload.os_version
+        existing_dev.attestation_status = att_status
         await db.commit()
         await db.refresh(existing_dev)
         return DeviceRegisterResponse(
@@ -97,10 +147,10 @@ async def register_device(
             platform=existing_dev.platform,
             attestation_status=existing_dev.attestation_status,
             registered_at=existing_dev.registered_at,
-            message="Device key re-activated successfully.",
+            message=f"Device key re-activated successfully ({att_msg}).",
         )
 
-    # 5. Insert new Device
+    # 6. Insert new Device
     new_device = Device(
         user_id=user_record.id,
         public_key_fingerprint=fingerprint,
@@ -108,7 +158,7 @@ async def register_device(
         platform=platform_clean,
         device_model=payload.device_model,
         os_version=payload.os_version,
-        attestation_status="key_registered",
+        attestation_status=att_status,
         registered_at=now,
     )
     db.add(new_device)
@@ -122,7 +172,7 @@ async def register_device(
         platform=new_device.platform,
         attestation_status=new_device.attestation_status,
         registered_at=new_device.registered_at,
-        message="Device public key registered successfully.",
+        message=f"Device public key registered successfully ({att_msg}).",
     )
 
 

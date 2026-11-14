@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from app.auth.rbac import AuthenticatedUser, get_current_user, require_role
 from app.db.session import get_db
 from app.models.session import Session
@@ -14,6 +15,8 @@ from app.models.course import Course
 from app.models.user import User
 from app.models.enrollment import Enrollment
 from app.models.attendance_record import AttendanceRecord
+from app.models.override import Override
+from app.models.audit_log import AuditLog
 
 router = APIRouter(prefix="/sessions", tags=["Attendance Sessions"])
 
@@ -360,7 +363,7 @@ async def manual_override(
             detail="Student is not actively enrolled in this course.",
         )
 
-    # 5. Insert or update AttendanceRecord
+    # 5. Insert or update AttendanceRecord with concurrency safety & full PostgreSQL audit trail
     now = datetime.now(timezone.utc)
     att_stmt = select(AttendanceRecord).where(
         AttendanceRecord.session_id == sid,
@@ -369,29 +372,96 @@ async def manual_override(
     att_res = await db.execute(att_stmt)
     existing_record = att_res.scalar_one_or_none()
 
-    if existing_record:
-        existing_record.method = "faculty_manual_override"
-        existing_record.status = "present"
-        existing_record.signature_verified = False
-        existing_record.verified_at = now
+    try:
+        async with db.begin_nested():
+            if existing_record:
+                existing_record.method = "faculty_manual_override"
+                existing_record.status = "present"
+                existing_record.signature_verified = False
+                existing_record.verified_at = now
+                existing_record.override_reason = payload.reason.strip()
+                existing_record.marked_by = faculty_user.id
+                record = existing_record
+            else:
+                new_record = AttendanceRecord(
+                    session_id=sid,
+                    student_id=student.id,
+                    device_id=None,
+                    method="faculty_manual_override",
+                    rssi_observed=None,
+                    signature_verified=False,
+                    verified_at=now,
+                    status="present",
+                    override_reason=payload.reason.strip(),
+                    marked_by=faculty_user.id,
+                )
+                db.add(new_record)
+                record = new_record
+            await db.flush()
+
+            # Record formal override action in overrides table
+            override_entry = Override(
+                record_id=record.id,
+                session_id=sid,
+                student_id=student.id,
+                actor_id=faculty_user.id,
+                reason=payload.reason.strip(),
+                action="grant",
+                created_at=now,
+            )
+            db.add(override_entry)
+
+            # Record security audit log entry in audit_log table
+            audit_entry = AuditLog(
+                actor_id=faculty_user.id,
+                action="manual_override",
+                target_entity="attendance_records",
+                target_id=str(record.id),
+                ip_hash=hashlib.sha256(faculty_user.firebase_uid.encode("utf-8")).hexdigest()[:64],
+                request_id=uuid.uuid4().hex,
+                payload={
+                    "session_id": str(sid),
+                    "student_id": str(student.id),
+                    "student_uid": student.firebase_uid,
+                    "reason": payload.reason.strip(),
+                },
+                created_at=now,
+            )
+            db.add(audit_entry)
+            await db.flush()
+
         await db.commit()
-        await db.refresh(existing_record)
-        record = existing_record
-    else:
-        new_record = AttendanceRecord(
+        await db.refresh(record)
+    except IntegrityError:
+        await db.rollback()
+        # Handle concurrent race condition idempotently
+        race_stmt = select(AttendanceRecord).where(
+            AttendanceRecord.session_id == sid,
+            AttendanceRecord.student_id == student.id,
+        )
+        race_res = await db.execute(race_stmt)
+        record = race_res.scalar_one_or_none()
+        if not record:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Manual override conflict during concurrent transaction.",
+            )
+        record.method = "faculty_manual_override"
+        record.status = "present"
+        record.override_reason = payload.reason.strip()
+        record.marked_by = faculty_user.id
+        override_entry = Override(
+            record_id=record.id,
             session_id=sid,
             student_id=student.id,
-            device_id=None,
-            method="faculty_manual_override",
-            rssi_observed=None,
-            signature_verified=False,
-            verified_at=now,
-            status="present",
+            actor_id=faculty_user.id,
+            reason=payload.reason.strip(),
+            action="grant",
+            created_at=now,
         )
-        db.add(new_record)
+        db.add(override_entry)
         await db.commit()
-        await db.refresh(new_record)
-        record = new_record
+        await db.refresh(record)
 
     # 6. Asynchronously project override into Firestore
     try:

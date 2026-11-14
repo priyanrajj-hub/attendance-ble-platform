@@ -1,4 +1,5 @@
 import uuid
+import hashlib
 from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,7 @@ from app.models.session import Session
 from app.models.user import User
 from app.models.enrollment import Enrollment
 from app.models.attendance_record import AttendanceRecord
+from app.models.audit_log import AuditLog
 from app.schemas.checkin import CheckInPayload, CheckInResponse
 from app.services.challenge_service import ChallengeService
 from app.services.device_verification_service import DeviceVerificationService
@@ -101,7 +103,33 @@ class AttendanceService:
                 message="Attendance already recorded for this session.",
             )
 
-        # 6. Validate rotating BLE challenge
+        # 6. Validate observed RSSI proximity against session threshold
+        if payload.observed_rssi > 0 or payload.observed_rssi < -120:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Observed RSSI value {payload.observed_rssi} dBm is invalid (must be between -120 and 0 dBm).",
+            )
+        if payload.observed_rssi < sess.rssi_threshold:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Observed RSSI ({payload.observed_rssi} dBm) does not meet session proximity threshold ({sess.rssi_threshold} dBm).",
+            )
+
+        # 7. Validate client timestamp freshness
+        if payload.client_timestamp is not None:
+            now_ms = int(now.timestamp() * 1000)
+            if payload.client_timestamp > now_ms + 10_000:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Client timestamp is in the future. Clock synchronization error.",
+                )
+            if payload.client_timestamp < now_ms - 60_000:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Client timestamp is stale (older than 60 seconds).",
+                )
+
+        # 8. Validate rotating BLE challenge
         is_challenge_valid = await ChallengeService.verify_challenge(
             db, sess, payload.ephemeral_nonce, payload.client_timestamp
         )
@@ -111,7 +139,7 @@ class AttendanceService:
                 detail="Invalid or expired BLE proximity nonce challenge.",
             )
 
-        # 7. Device & Asymmetric Signature Verification (Mandatory)
+        # 9. Device & Asymmetric Signature Verification (Mandatory)
         if not payload.signature or not payload.signature.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -135,7 +163,17 @@ class AttendanceService:
         signature_verified = True
         device_id = device.id if device else None
 
-        # 8. Create attendance record with database transaction idempotency
+        # 10. Replay Protection: Check if this signature or nonce was already consumed
+        is_replayed, replay_reason = await ReplayProtectionService.check_replay(
+            db, sid, user_record.id, payload.ephemeral_nonce, payload.signature
+        )
+        if is_replayed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=replay_reason,
+            )
+
+        # 11. Create attendance record with database transaction idempotency and audit trail
         new_record = AttendanceRecord(
             session_id=sid,
             student_id=user_record.id,
@@ -151,11 +189,37 @@ class AttendanceService:
             async with db.begin_nested():
                 db.add(new_record)
                 await db.flush()
+
+                # Record consumed nonce and signature hash for strict replay protection
+                await ReplayProtectionService.record_consumption(
+                    db, sid, user_record.id, payload.ephemeral_nonce, payload.signature
+                )
+
+                # Persist immutable audit log entry in PostgreSQL
+                audit_entry = AuditLog(
+                    actor_id=user_record.id,
+                    action="proximity_checkin",
+                    target_entity="attendance_records",
+                    target_id=str(new_record.id),
+                    ip_hash=hashlib.sha256(user_record.firebase_uid.encode("utf-8")).hexdigest()[:64],
+                    request_id=uuid.uuid4().hex,
+                    payload={
+                        "session_id": str(sid),
+                        "method": "ble_signed_nonce",
+                        "rssi_observed": payload.observed_rssi,
+                        "device_id": str(device_id) if device_id else None,
+                        "timestamp_ms": payload.client_timestamp,
+                    },
+                    created_at=now,
+                )
+                db.add(audit_entry)
+                await db.flush()
+
             await db.commit()
             await db.refresh(new_record)
         except IntegrityError:
             await db.rollback()
-            # Concurrent race caught by uq_session_student
+            # Concurrent race caught by uq_session_student or consumed nonce
             race_record = await ReplayProtectionService.get_existing_attendance(
                 db, sid, user_record.id
             )
@@ -173,7 +237,7 @@ class AttendanceService:
                 )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Attendance registration conflict.",
+                detail="Attendance registration conflict or replay detected.",
             )
 
         # 9. Asynchronously project verified attendance into Firestore for live UI synchronization
