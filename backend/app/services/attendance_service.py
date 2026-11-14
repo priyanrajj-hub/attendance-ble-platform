@@ -111,33 +111,29 @@ class AttendanceService:
                 detail="Invalid or expired BLE proximity nonce challenge.",
             )
 
-        # 7. Device & Asymmetric Signature Verification
-        signature_verified = False
-        device_id = None
-        if payload.signature:
-            sig_ok, device = await DeviceVerificationService.verify_device_and_signature(
-                db,
-                user_record,
-                payload.session_id,
-                payload.ephemeral_nonce,
-                payload.client_timestamp,
-                payload.signature,
-                payload.public_key_fingerprint,
+        # 7. Device & Asymmetric Signature Verification (Mandatory)
+        if not payload.signature or not payload.signature.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cryptographic device signature is required for proximity attendance.",
             )
-            if not sig_ok:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Cryptographic device signature verification failed.",
-                )
-            signature_verified = True
-            device_id = device.id if device else None
-        else:
-            # Check if student has a registered active device
-            active_device = await DeviceVerificationService.get_active_device(
-                db, user_record.id, payload.public_key_fingerprint
+
+        sig_ok, device = await DeviceVerificationService.verify_device_and_signature(
+            db,
+            user_record,
+            payload.session_id,
+            payload.ephemeral_nonce,
+            payload.client_timestamp,
+            payload.signature,
+            payload.public_key_fingerprint,
+        )
+        if not sig_ok:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cryptographic device signature verification failed.",
             )
-            if active_device:
-                device_id = active_device.id
+        signature_verified = True
+        device_id = device.id if device else None
 
         # 8. Create attendance record with database transaction idempotency
         new_record = AttendanceRecord(

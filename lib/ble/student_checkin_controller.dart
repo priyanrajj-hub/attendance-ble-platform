@@ -88,7 +88,6 @@ class StudentCheckInController extends StateNotifier<CheckInState> {
       state = const CheckInError(DeviceNotBoundFailure());
       return;
     }
-    final localDeviceId = await _deviceBindingService.getOrCreateDeviceId();
 
     // 3. Permissions & Bluetooth Adapter State
     final permFailure = await _checkPermissionsAndAdapter();
@@ -158,7 +157,7 @@ class StudentCheckInController extends StateNotifier<CheckInState> {
       return;
     }
 
-    // 6. Submit Proximity Attendance Exclusively to PostgreSQL Authority via FastAPI
+    // 6. Generate Cryptographic Device Signature and Submit to PostgreSQL Authority via FastAPI
     state = CheckInSubmitting(code: winner.code, rssi: meanRssi.round());
 
     if (_apiService == null) {
@@ -167,11 +166,21 @@ class StudentCheckInController extends StateNotifier<CheckInState> {
     }
 
     try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final signature = await _deviceBindingService.signPayload(
+        sessionId: sessionId,
+        nonce: winner.code,
+        timestamp: timestamp,
+      );
+      final fingerprint = await _deviceBindingService.getPublicKeyFingerprint();
+
       final apiRes = await _apiService.submitProximityCheckIn(
         sessionId: sessionId,
         ephemeralNonce: winner.code,
         observedRssi: meanRssi.round(),
-        publicKeyFingerprint: localDeviceId,
+        clientTimestamp: timestamp,
+        publicKeyFingerprint: fingerprint,
+        signature: signature,
       );
 
       if (apiRes.isSuccess) {

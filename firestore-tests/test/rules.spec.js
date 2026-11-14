@@ -414,6 +414,24 @@ describe('Phase 3 Comprehensive Firestore Security Rules Suite', () => {
             }));
         });
 
+        it('allows faculty to project PostgreSQL session with backendSessionId', async () => {
+            const ctx = testEnv.authenticatedContext('faculty1', {
+                email: 'fac1@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            const endsAt = new Date(Date.now() + 15 * 60 * 1000);
+
+            await assertSucceeds(db.collection('sessions').doc('00000000-0000-0000-0000-000000000001').set({
+                courseId: 'CSE450',
+                facultyId: 'faculty1',
+                startedAt: serverTimestamp(),
+                endsAt: endsAt,
+                status: 'open',
+                backendSessionId: '00000000-0000-0000-0000-000000000001',
+            }));
+        });
+
         it('denies faculty creating session for unassigned course', async () => {
             const ctx = testEnv.authenticatedContext('faculty2', {
                 email: 'fac2@ch.amrita.edu',
@@ -478,6 +496,19 @@ describe('Phase 3 Comprehensive Firestore Security Rules Suite', () => {
             }));
         });
 
+        it('allows faculty owner to write rotating 32-hex 128-bit challenge code', async () => {
+            const ctx = testEnv.authenticatedContext('faculty1', {
+                email: 'fac1@ch.amrita.edu',
+                email_verified: true,
+            });
+            const db = ctx.firestore();
+            await assertSucceeds(db.collection('sessions').doc('sessionOpen').collection('live').doc('current').set({
+                code: '4f5a8b2c1d3e9f0a5b6c7d8e9f0a1b2c',
+                prevCode: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d',
+                rotatedAt: serverTimestamp(),
+            }));
+        });
+
         it('denies student reading live/current secret document', async () => {
             const ctx = testEnv.authenticatedContext('student1', {
                 email: 'stu1@ch.students.amrita.edu',
@@ -522,13 +553,13 @@ describe('Phase 3 Comprehensive Firestore Security Rules Suite', () => {
             });
         });
 
-        it('allows student to check in with current valid code, matching deviceId and RSSI in range', async () => {
+        it('denies direct student check-in writes to Firestore (PostgreSQL authority is enforced)', async () => {
             const ctx = testEnv.authenticatedContext('student1', {
                 email: 'stu1@ch.students.amrita.edu',
                 email_verified: true,
             });
             const db = ctx.firestore();
-            await assertSucceeds(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
+            await assertFails(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
                 studentUid: 'student1',
                 markedAt: serverTimestamp(),
                 method: 'ble',
@@ -538,13 +569,13 @@ describe('Phase 3 Comprehensive Firestore Security Rules Suite', () => {
             }));
         });
 
-        it('allows student to check in with valid prevCode during grace period', async () => {
+        it('denies direct student check-in with prevCode to Firestore', async () => {
             const ctx = testEnv.authenticatedContext('student1', {
                 email: 'stu1@ch.students.amrita.edu',
                 email_verified: true,
             });
             const db = ctx.firestore();
-            await assertSucceeds(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
+            await assertFails(db.collection('sessions').doc('sessionOpen').collection('attendance').doc('student1').set({
                 studentUid: 'student1',
                 markedAt: serverTimestamp(),
                 method: 'ble',

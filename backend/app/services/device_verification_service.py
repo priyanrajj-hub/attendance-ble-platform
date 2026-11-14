@@ -1,5 +1,6 @@
 import uuid
 import hashlib
+import hmac
 import base64
 from typing import Optional, Tuple
 from datetime import datetime, timezone

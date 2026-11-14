@@ -74,9 +74,8 @@ class ChallengeService:
     ) -> bool:
         """
         Verifies that a rotating challenge is cryptographically valid, session-bound, and fresh.
-        1. Validates 128-bit session-bound HMAC-SHA256 challenges across the active tolerance window.
-        2. Validates legacy TOTP window codes.
-        3. Validates direct SHA-256 match for static seed compatibility.
+        Validates 128-bit session-bound HMAC-SHA256 challenges across the active tolerance window.
+        Enforces client timestamp freshness against server clock drift.
         """
         if not submitted_nonce or not submitted_nonce.strip():
             return False
@@ -84,40 +83,15 @@ class ChallengeService:
         now = datetime.now(timezone.utc)
         clean_nonce = submitted_nonce.strip().lower()
 
-        # 1. Check against 128-bit session-bound rotating challenges
+        # Enforce client timestamp freshness (within 60 seconds) if provided
+        if client_timestamp is not None:
+            now_ms = int(now.timestamp() * 1000)
+            if abs(now_ms - client_timestamp) > 60_000:
+                return False
+
+        # Check against 128-bit session-bound rotating challenges
         valid_128 = cls.get_valid_challenges(session.secret_hash, str(session.id), now)
         if clean_nonce in [c.lower() for c in valid_128]:
-            try:
-                epoch = int(now.timestamp())
-                step = epoch // cls.ROTATION_PERIOD_SECONDS
-                challenge_record = Challenge(
-                    session_id=session.id,
-                    challenge_code=clean_nonce,
-                    time_step=step,
-                    valid_from=now - timedelta(seconds=cls.ROTATION_PERIOD_SECONDS * cls.TOLERANCE_STEPS_PAST),
-                    valid_until=now + timedelta(seconds=cls.ROTATION_PERIOD_SECONDS),
-                    status="consumed",
-                )
-                db.add(challenge_record)
-            except Exception:
-                pass
-            return True
-
-        # 2. Check legacy 8-character prefix of valid challenges or step codes
-        epoch = int(now.timestamp())
-        current_step = epoch // cls.ROTATION_PERIOD_SECONDS
-        legacy_valid = []
-        for offset in range(-cls.TOLERANCE_STEPS_PAST, cls.TOLERANCE_STEPS_FUTURE + 1):
-            s = current_step + offset
-            legacy_valid.append(cls.compute_totp_code(session.secret_hash, s))
-            legacy_valid.append(cls.compute_challenge(session.secret_hash, str(session.id), s)[:8])
-
-        if clean_nonce in [c.lower() for c in legacy_valid]:
-            return True
-
-        # 3. Check direct SHA-256 match (for seed / initial secret compatibility)
-        direct_hash = hashlib.sha256(submitted_nonce.encode("utf-8")).hexdigest()
-        if direct_hash == session.secret_hash:
             return True
 
         return False

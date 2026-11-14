@@ -251,6 +251,32 @@ async def test_forged_device_signature_rejected(
 
 
 @pytest.mark.asyncio
+async def test_missing_device_signature_rejected(
+    client: AsyncClient,
+    student_auth_user: AuthenticatedUser,
+    e2e_setup: dict,
+):
+    app.dependency_overrides[get_current_user] = lambda: student_auth_user
+
+    sess = e2e_setup["session"]
+    now = datetime.now(timezone.utc)
+    step = int(now.timestamp()) // ChallengeService.ROTATION_PERIOD_SECONDS
+    code = ChallengeService.compute_challenge(sess.secret_hash, str(sess.id), step)
+
+    # Submit valid challenge code without signature
+    res = await client.post(
+        "/api/v1/attendance/check-in",
+        json={
+            "session_id": str(sess.id),
+            "ephemeral_nonce": code,
+            "observed_rssi": -70,
+        },
+    )
+    assert res.status_code == 400
+    assert "Cryptographic device signature is required" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_expired_rotating_code_rejected(
     client: AsyncClient,
     student_auth_user: AuthenticatedUser,
