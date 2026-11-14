@@ -43,10 +43,16 @@ ui-debug.log*
 node_modules/
 npm-debug.log*
 
-# Secrets (templates stay tracked)
+# Environment & Secrets (templates stay tracked)
 .env
 .env.*
+*.env
 !.env.example
+!**/.env.example
+env/
+.venv/
+backend/.venv/
+backend/env/
 secrets/
 credentials/
 *.pem

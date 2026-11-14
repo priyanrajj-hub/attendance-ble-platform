@@ -67,8 +67,8 @@ preview_path = os.path.abspath(
 if os.path.exists(preview_path):
     app.mount("/app", StaticFiles(directory=preview_path, html=True), name="app")
 
-# 5. Direct APK Binary Path
-apk_path = os.path.abspath(
+# 5. Direct APK Binary Paths
+apk_dir = os.path.abspath(
     os.path.join(
         os.path.dirname(__file__),
         "..",
@@ -77,32 +77,76 @@ apk_path = os.path.abspath(
         "app",
         "outputs",
         "flutter-apk",
-        "app-prod-debug.apk",
     )
 )
+apk_arm64_path = os.path.join(apk_dir, "app-arm64-v8a-release.apk")
+apk_universal_path = os.path.join(apk_dir, "app-release.apk")
+apk_arm32_path = os.path.join(apk_dir, "app-armeabi-v7a-release.apk")
+apk_debug_path = os.path.join(apk_dir, "app-prod-debug.apk")
+
+# Default primary APK (prefer optimized release arm64, fallback to universal or debug)
+if os.path.exists(apk_arm64_path):
+    apk_path = apk_arm64_path
+    apk_default_name = "AmritaAttendance-arm64-release.apk"
+elif os.path.exists(apk_universal_path):
+    apk_path = apk_universal_path
+    apk_default_name = "AmritaAttendance-universal-release.apk"
+else:
+    apk_path = apk_debug_path
+    apk_default_name = "AmritaAttendance-prod-debug.apk"
 
 
-@app.api_route("/download/app.apk", methods=["GET", "HEAD"], summary="Download compiled Android APK binary")
+@app.api_route("/download/app.apk", methods=["GET", "HEAD"], summary="Download compiled Android APK binary (Default arm64-v8a)")
 async def download_apk():
     """Streams the signed production Android APK directly to mobile or desktop browsers."""
-    if os.path.exists(apk_path):
+    target_path = apk_arm64_path if os.path.exists(apk_arm64_path) else (apk_universal_path if os.path.exists(apk_universal_path) else apk_path)
+    if os.path.exists(target_path):
         return FileResponse(
-            path=apk_path,
-            filename="AmritaAttendance-prod-debug.apk",
+            path=target_path,
+            filename=os.path.basename(target_path),
             media_type="application/vnd.android.package-archive",
             headers={
                 "Accept-Ranges": "bytes",
-                "Content-Disposition": 'attachment; filename="AmritaAttendance-prod-debug.apk"',
+                "Content-Disposition": f'attachment; filename="{os.path.basename(target_path)}"',
                 "Cache-Control": "public, max-age=3600",
             },
         )
     return {"error": "APK not found. Please compile the app first."}
 
 
+@app.api_route("/download/universal", methods=["GET", "HEAD"], summary="Download Universal Release APK")
+async def download_universal_apk():
+    if os.path.exists(apk_universal_path):
+        return FileResponse(
+            path=apk_universal_path,
+            filename="AmritaAttendance-universal-release.apk",
+            media_type="application/vnd.android.package-archive",
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Disposition": 'attachment; filename="AmritaAttendance-universal-release.apk"',
+            },
+        )
+    return {"error": "Universal APK not found."}
+
+
+@app.api_route("/download/arm64", methods=["GET", "HEAD"], summary="Download arm64-v8a Release APK")
+async def download_arm64_apk():
+    if os.path.exists(apk_arm64_path):
+        return FileResponse(
+            path=apk_arm64_path,
+            filename="AmritaAttendance-arm64-release.apk",
+            media_type="application/vnd.android.package-archive",
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Disposition": 'attachment; filename="AmritaAttendance-arm64-release.apk"',
+            },
+        )
+    return {"error": "ARM64 APK not found."}
+
+
 @app.get("/download", response_class=HTMLResponse, summary="APK Download Hub with QR Code")
 async def download_landing_page():
     """Generates a responsive APK download hub with an auto-generated QR code for instant mobile camera scanning."""
-    # Generate QR Code pointing to mobile Wi-Fi download link
     qr_data = "http://192.168.1.13:8000/download/app.apk"
     qr = qrcode.QRCode(
         version=1,
@@ -158,16 +202,27 @@ async def download_landing_page():
           margin-bottom: 16px;
         }}
         h1 {{ font-size: 24px; margin-bottom: 8px; font-weight: 700; }}
-        p {{ color: #94a3b8; font-size: 14px; line-height: 1.5; margin-bottom: 24px; }}
+        p {{ color: #94a3b8; font-size: 14px; line-height: 1.5; margin-bottom: 20px; }}
+        .notice {{
+          background: rgba(239, 68, 68, 0.15);
+          border: 1px solid rgba(239, 68, 68, 0.4);
+          color: #fca5a5;
+          padding: 12px;
+          border-radius: 12px;
+          font-size: 13px;
+          margin-bottom: 20px;
+          text-align: left;
+        }}
+        .notice strong {{ color: #ffffff; display: block; margin-bottom: 4px; }}
         .qr-box {{
           background: #0b0b14;
           padding: 16px;
           border-radius: 16px;
           display: inline-block;
           border: 2px solid rgba(99, 102, 241, 0.4);
-          margin-bottom: 24px;
+          margin-bottom: 20px;
         }}
-        .qr-box img {{ display: block; border-radius: 8px; max-width: 200px; height: auto; }}
+        .qr-box img {{ display: block; border-radius: 8px; max-width: 180px; height: auto; }}
         .btn {{
           display: block;
           width: 100%;
@@ -177,23 +232,30 @@ async def download_landing_page():
           padding: 14px;
           border-radius: 14px;
           font-weight: 600;
-          font-size: 16px;
+          font-size: 15px;
           box-sizing: border-box;
           transition: transform 0.2s;
+          margin-bottom: 10px;
         }}
         .btn:hover {{ transform: translateY(-2px); }}
-        .btn-sub {{
-          display: inline-block;
-          margin-top: 14px;
-          color: #818cf8;
+        .btn-sec {{
+          display: block;
+          width: 100%;
+          background: rgba(255, 255, 255, 0.08);
+          color: #c7d2fe;
           text-decoration: none;
+          padding: 10px;
+          border-radius: 12px;
+          font-weight: 500;
           font-size: 13px;
+          box-sizing: border-box;
+          margin-bottom: 8px;
         }}
         .instructions {{
-          margin-top: 24px;
+          margin-top: 20px;
           text-align: left;
           background: rgba(15, 23, 42, 0.6);
-          padding: 16px;
+          padding: 14px;
           border-radius: 12px;
           font-size: 12px;
           color: #cbd5e1;
@@ -203,28 +265,34 @@ async def download_landing_page():
     </head>
     <body>
       <div class="card">
-        <div class="badge">✓ Verified Production Build</div>
+        <div class="badge">✓ Production Release Build v1.0.0+1</div>
         <h1>Amrita BLE Attendance</h1>
-        <p>Scan with your phone's camera or tap below to download the Android APK directly.</p>
+        <p>Real BLE Attendance Platform for Faculty & Students</p>
         
+        <div class="notice">
+          <strong>⚠️ Wi-Fi Network Requirement:</strong>
+          Your phone MUST be connected to the <strong>same Wi-Fi network</strong> as this PC (192.168.1.13). If your phone is on <strong>Mobile Cellular Data (LTE/5G)</strong>, it cannot reach this private network. Please enable Wi-Fi on your phone!
+        </div>
+
         <div class="qr-box">
           <img src="data:image/png;base64,{qr_b64}" alt="Scan QR Code to Download APK">
         </div>
 
-        <a href="/download/app.apk" class="btn">📥 Download APK (212 MB)</a>
-        <a href="/app/" class="btn-sub">Open Interactive Web Simulator →</a>
+        <a href="/download/app.apk" class="btn">📥 Download Production APK (18.2 MB - ARM64)</a>
+        <a href="/download/universal" class="btn-sec">📦 Download Universal APK (46.2 MB - All Devices)</a>
 
         <div class="instructions">
-          <strong>📱 Installation Steps:</strong><br>
-          1. Tap Download or scan QR code on same Wi-Fi.<br>
-          2. Tap the downloaded APK in your Notifications/Files.<br>
-          3. Tap <em>Install</em> (Allow unknown apps if prompted).<br>
-          4. Open app & verify your fingerprint!
+          <strong>📱 Quick Installation Guide:</strong><br>
+          1. Connect your Android phone to the same Wi-Fi.<br>
+          2. Tap Download above or scan the QR code.<br>
+          3. Tap the downloaded APK in Notifications/Files to Install.<br>
+          4. Open app & register your institutional account!
         </div>
       </div>
     </body>
     </html>
     """
+    return HTMLResponse(content=html)
     return HTMLResponse(content=html)
 
 
