@@ -72,3 +72,7 @@ coverage/
 __pycache__/
 *.pyc
 
+# Local symbols & debug logs
+build/symbols/
+
+
